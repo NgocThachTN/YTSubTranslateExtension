@@ -263,7 +263,7 @@ function resolveEffectiveGenre(requestedStyle = 'auto', videoContext = '') {
   if (/\b(bbc|cnn|vtv|cnbc|bloomberg|reuters|news|thời sự|bản tin|phóng sự|documentary|điều tra)\b/i.test(lower)) {
     return 'news';
   }
-  if (/\b(running man|knowing bros|2 ngày 1 đêm|talkshow|podcast|phỏng vấn|interview|hot ones|the tonight show|game show|weekly idol|ep\.\s*\d+|tập\s*\d+|show thực tế)\b/i.test(lower)) {
+  if (/\b(running man|knowing bros|2 ngày 1 đêm|talkshow|podcast|phỏng vấn|interview|hot ones|the tonight show|game show|weekly idol|amazing saturday|ep\.\s*\d+|tập\s*\d+|show thực tế)\b|乃木坂工事中|nogizaka under construction|そこ曲がったら|日向坂で会いましょう|乃木坂どこへ|スター誕生|akbingo|サヨナラ毛利さん|モニタリング|水曜日のダウンタウン|ロンドンハーツ|アメトーーク|しゃべくり007|それsnow man|vs嵐|嵐にしやがれ|バラエティ|月曜から夜ふかし/i.test(videoContext || '')) {
     return 'reality_show';
   }
   if (/\b(mv|official music video|lyrics|audio|song|ca khúc|bài hát|album|♪|♫)\b/i.test(lower)) {
@@ -449,6 +449,21 @@ function cleanOutputByGenre(text, effectiveGenre, role, videoTitle = '') {
       .replace(/\banh yêu\b/gi, 'anh')
       .replace(/\bem yêu\b/gi, 'em')
       .replace(/\bcục cưng\b/gi, 'bạn');
+
+    // For Japanese idol variety shows (乃木坂工事中, Sakamichi, 48G), eliminate robotic "Tôi"
+    if (/(乃木坂|櫻坂|日向坂|akb48|工事中|そこ曲がったら|日向坂で会いましょう|スター誕生|モニタリング|水曜日のダウンタウン|ロンドンハーツ)/i.test(videoTitle)) {
+      cleaned = cleaned
+        .replace(/\bTôi nghĩ\b/g, 'Em nghĩ')
+        .replace(/\btôi nghĩ\b/g, 'em nghĩ')
+        .replace(/\bTôi thấy\b/g, 'Em thấy')
+        .replace(/\btôi thấy\b/g, 'em thấy')
+        .replace(/\bTôi muốn\b/g, 'Em muốn')
+        .replace(/\btôi muốn\b/g, 'em muốn')
+        .replace(/\bTôi không\b/g, 'Em không')
+        .replace(/\btôi không\b/g, 'em không')
+        .replace(/\bTôi đã\b/g, 'Em đã')
+        .replace(/\btôi đã\b/g, 'em đã');
+    }
   } else if (effectiveGenre === 'news') {
     // In news & reports, eliminate romantic & casual pronouns
     cleaned = cleaned
@@ -469,6 +484,28 @@ function getPronounInstruction(effectiveRole = 'auto', videoTitle = '', effectiv
 
   // 1. REALITY SHOW / TALKSHOW / PODCAST / INTERVIEW DIRECTIVE
   if (effectiveGenre === 'reality_show') {
+    const isJpIdolShow = /(乃木坂|櫻坂|日向坂|akb48|ske48|nmb48|hkt48|ngu48|stu48|akbingo|工事中|そこ曲がったら|日向坂で会いましょう|スター誕生|超・乃木坂スター誕生|モニタリング|水曜日のダウンタウン|ロンドンハーツ|アメトーーク|しゃべくり|ジャニーズ|snow man|vs嵐|嵐にしやがれ|バラエティ|月曜から夜ふかし|バナナマン|オードリー)/i.test(videoTitle);
+
+    if (isJpIdolShow) {
+      return `\nCRITICAL PRONOUN DIRECTIVE - JAPANESE IDOL VARIETY SHOW (SHOW IDOL NHẬT - 乃木坂工事中, SAKAMICHI, 48G, VARIETY):${figureHint}
+- CONTEXT: Japanese idol variety show (such as 乃木坂工事中 / Nogizaka Under Construction, そこ曲がったら、櫻坂?, 日向坂で会いましょう, AKBINGO!, etc.) featuring comedian MCs (Bananaman, Audrey, Sawabe, Tsuchida) interacting with young female idol members.
+- IDOL MEMBERS PRONOUNS (XƯNG HÔ CỦA THÀNH VIÊN IDOL):
+  * Female idols addressing MCs (Shitara-san, Himura-san, Wakabayashi-san, etc.) or staff: MUST refer to themselves as "em" (e.g. "Em nghĩ là...", "Hôm qua em..."). STRICT PROHIBITION: NEVER use "tôi" for idol members! Address MCs as "anh [Tên]" (e.g. "anh Shitara", "anh Himura", "anh Wakabayashi") or "thầy/chú".
+  * Junior idols addressing senior members (Senpai): Junior idols address seniors as "chị [Tên]" (or "tiền bối"), and refer to themselves as "em".
+  * Peer members (Dōki - cùng thế hệ): Address each other naturally as "cậu - tớ", "mình - bạn", "mấy đứa mình".
+- MCs PRONOUNS (XƯNG HÔ CỦA MC):
+  * When addressing idols: MCs address idols as "em", "[Tên]", "mấy đứa", "các em". MCs refer to themselves as "anh", "tôi", or "chúng tôi".
+  * When addressing viewers: "quý vị khán giả", "mọi người", "các bạn".
+- IDOL ENTERTAINMENT REACTIONS (DỊCH PHẢN ỨNG DỄ THƯƠNG & HÀI HƯỚC):
+  * Translate characteristic variety reactions lively and cutely:
+    - "えぇー!?" / "嘘!?" -> "Hả?!", "Thật á?!", "Trời ơi!"
+    - "ヤバい" -> "Toang rồi!", "Nguy hiểm ghê!", "Ghê thật á!"
+    - "可愛い" -> "Dễ thương quá à!", "Đáng yêu xỉu!"
+    - "無理無理" -> "Không được đâu!", "Chịu luôn á!"
+    - "なんで!?" -> "Sao lại thế chứ?!", "Ủa tại sao?!"
+- STRICT PROHIBITION: NEVER use romantic couple pronouns ("anh yêu / em yêu")! This is an idol variety show.`;
+    }
+
     let roleSpecific = '';
     if (effectiveRole === 'show_host') {
       roleSpecific = `\n- SPEAKER IS MC/HOST: When addressing the audience, use "chúng tôi", "quý vị và các bạn", "mọi người". When talking with guests, address them as "bạn", "anh", "chị", "em".`;

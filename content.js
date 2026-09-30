@@ -325,18 +325,40 @@
       genre = 'news';
     }
 
-    // 3. Check for Reality Show / Variety Show / Talk Show / Podcast / Interview
+    // 3. Check for Reality Show / Variety Show / Talk Show / Podcast / Interview / Japanese Idol Shows
     const showKeywords = /\b(running man|2 ngày 1 đêm|knowing bros|talkshow|podcast|phỏng vấn|interview|hot ones|the tonight show|late night|graham norton|game show|challenge|weekly idol|amazing saturday|street woman fighter|single's inferno|show me the money|ted talk|vogue 73 questions|vui vẻ|tập\s+\d+|ep\.\s*\d+|episode\s*\d+|show thực tế)\b/i;
-    if (genre !== 'news' && (showKeywords.test(titleLower) || showKeywords.test(channelLower))) {
+    const jpIdolShowPattern = /(乃木坂工事中|nogizaka under construction|そこ曲がったら[、,]?\s*櫻坂|日向坂で会いましょう|乃木坂どこへ|スター誕生|超・乃木坂スター誕生|akbingo|サヨナラ毛利さん|モニタリング|水曜日のダウンタウン|ロンドンハーツ|アメトーーク|しゃべくり007|それsnow man|vs嵐|嵐にしやがれ|月曜から夜ふかし)/i;
+
+    const isShowDetected = genre !== 'news' && (showKeywords.test(titleLower) || showKeywords.test(channelLower) || jpIdolShowPattern.test(rawTitle) || jpIdolShowPattern.test(channel));
+    if (isShowDetected) {
       genre = 'reality_show';
-      // Try to parse guest / artist from reality show title
-      const guestMatch = rawTitle.match(/(?:with|khách mời[:\s]|featuring|ft\.?|gặp gỡ|phỏng vấn)\s+([^,\-\|\(\)\[\]]{2,40})/i);
-      if (guestMatch) {
-        guest = guestMatch[1].trim();
+
+      // 3.1 Check Japanese Idol Variety Shows first
+      const jpMatch = rawTitle.match(jpIdolShowPattern) || channel.match(jpIdolShowPattern);
+      if (jpMatch) {
+        show = jpMatch[1].trim();
+        const epMatch = rawTitle.match(/#\s*(\d+)|第\s*(\d+)\s*回|ep\.?\s*(\d+)/i);
+        if (epMatch) {
+          show += ` #${epMatch[1] || epMatch[2] || epMatch[3]}`;
+        }
+        if (/乃木坂/i.test(rawTitle)) guest = '乃木坂46';
+        else if (/櫻坂/i.test(rawTitle)) guest = '櫻坂46';
+        else if (/日向坂/i.test(rawTitle)) guest = '日向坂46';
+        else if (/akb/i.test(rawTitle)) guest = 'AKB48 Group';
       }
-      const showMatch = rawTitle.match(/^\[([^\]]+)\]|^([^:\|\-]+?)(?:\s*(?:ep\.?\s*\d+|tập\s*\d+|khách mời|with|phỏng vấn))/i);
-      if (showMatch) {
-        show = (showMatch[1] || showMatch[2]).trim();
+
+      // 3.2 Try to parse guest / artist from reality show title
+      if (!guest) {
+        const guestMatch = rawTitle.match(/(?:with|khách mời[:\s]|featuring|ft\.?|gặp gỡ|phỏng vấn)\s+([^,\-\|\(\)\[\]]{2,40})/i);
+        if (guestMatch) {
+          guest = guestMatch[1].trim();
+        }
+      }
+      if (!show) {
+        const showMatch = rawTitle.match(/^\[([^\]]+)\]|^([^:\|\-]+?)(?:\s*(?:ep\.?\s*\d+|tập\s*\d+|khách mời|with|phỏng vấn))/i);
+        if (showMatch) {
+          show = (showMatch[1] || showMatch[2]).trim();
+        }
       }
     }
 
