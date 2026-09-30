@@ -795,14 +795,49 @@
   }
 
   /**
+   * Find subtitle cue at specific video timestamp
+   */
+  function getCurrentCueAtTime(timeMs) {
+    if (!videoTimedCues || videoTimedCues.length === 0) return null;
+    return videoTimedCues.find((c) => timeMs >= c.startMs && timeMs <= c.startMs + c.durMs + 400) || null;
+  }
+
+  /**
+   * Render original subtitle immediately with a loading indicator beneath it.
+   * Ensures subtitle is never blank or delayed while AI/service is translating.
+   */
+  function renderSubtitleWithLoading(origText) {
+    if (!innerBox || !origText) return;
+
+    if (originalTextElement) {
+      originalTextElement.textContent = origText;
+    }
+    if (origWrapper) {
+      origWrapper.style.display = 'block';
+    }
+
+    if (translatedTextElement) {
+      translatedTextElement.innerHTML = '<span class="ytsub-loading-line">Đang dịch<span class="ytsub-loading-dots">...</span></span>';
+    }
+    if (transWrapper) {
+      transWrapper.style.display = 'block';
+    }
+
+    innerBox.classList.remove('ytsub-hidden');
+  }
+
+  /**
    * Render subtitle lines simultaneously (Guarantees atomic parallel display - song song cùng lúc)
    */
   function renderSubtitlesSimultaneously(origText, transText) {
     if (!innerBox) return;
 
     if (!transText) {
-      // Never display a half-rendered subtitle without translation
-      innerBox.classList.add('ytsub-hidden');
+      if (origText) {
+        renderSubtitleWithLoading(origText);
+      } else {
+        innerBox.classList.add('ytsub-hidden');
+      }
       return;
     }
 
@@ -814,6 +849,7 @@
     }
 
     if (translatedTextElement) {
+      translatedTextElement.innerHTML = '';
       translatedTextElement.textContent = transText;
     }
     if (transWrapper) {
@@ -861,7 +897,10 @@
       return;
     }
 
-    // 2. If not cached yet (e.g. at 1s or 5s upon startup or right after seek):
+    // 2. If not cached yet (e.g. at 1s, 5s or right after seeking):
+    // IMMEDIATELY render original subtitle with loading line below it, never blank!
+    renderSubtitleWithLoading(currentText);
+
     // Instantly trigger lookahead cluster pre-translation for upcoming cues!
     prioritizeUpcomingClusters();
 
@@ -1147,7 +1186,34 @@
   }
 
   function onVideoSeeked() {
-    prioritizeUpcomingClusters();
+    const currentMs = getVideoCurrentTimeMs();
+    prioritizeUpcomingClusters(currentMs);
+
+    if (!settings.enabled || settings.displayMode === 'off') return;
+
+    const activeText = extractCaptionText();
+    const service = settings.translationService || 'google';
+
+    if (activeText) {
+      const cacheKey = getCacheKey(service, settings.sourceLang, settings.targetLang, activeText);
+      const cached = localCache.get(cacheKey);
+      if (cached) {
+        renderSubtitlesSimultaneously(activeText, cached);
+      } else {
+        renderSubtitleWithLoading(activeText);
+      }
+    } else {
+      const cue = getCurrentCueAtTime(currentMs);
+      if (cue && cue.text) {
+        const cacheKey = getCacheKey(service, settings.sourceLang, settings.targetLang, cue.text);
+        const cached = localCache.get(cacheKey);
+        if (cached) {
+          renderSubtitlesSimultaneously(cue.text, cached);
+        } else {
+          renderSubtitleWithLoading(cue.text);
+        }
+      }
+    }
   }
 
   function onVideoPlay() {

@@ -139,3 +139,29 @@ ytd-shorts #ytsub-overlay-container,
 .ytsub-translating {
   opacity: 0.85;
 }
+
+/* Animated loading line for pending translation */
+.ytsub-loading-line {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.88em !important;
+  font-style: italic;
+  color: #cbd5e1 !important;
+  letter-spacing: 0.3px;
+  animation: ytsubPulse 1.4s ease-in-out infinite;
+}
+
+.ytsub-loading-dots {
+  display: inline-block;
+  margin-left: 2px;
+  letter-spacing: 2px;
+}
+
+@keyframes ytsubPulse {
+  0%, 100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
