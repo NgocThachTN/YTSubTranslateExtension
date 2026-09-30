@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // General tab controls
   const toggleEnabled = document.getElementById('toggle-enabled');
+  const selectTranslationService = document.getElementById('select-translation-service');
   const toggleBilingual = document.getElementById('toggle-bilingual');
   const checkHideNative = document.getElementById('check-hide-native');
   const btnClearCache = document.getElementById('btn-clear-cache');
@@ -49,6 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentSettings = {
     enabled: true,
     displayMode: 'bilingual',
+    translationService: 'google',
     sourceLang: 'auto',
     targetLang: 'vi',
     fontSize: 20,
@@ -56,7 +58,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     originalColor: '#FFFFFF',
     bgOpacity: 75,
     subPosition: 'bottom',
-    subBottomOffset: 60,
+    subBottomOffset: 0,
     hideOriginalNative: true,
     customApiKey: '',
   };
@@ -165,10 +167,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function loadSettings() {
     try {
       const stored = await chrome.storage.sync.get(Object.keys(currentSettings));
+      if (stored.subBottomOffset === 60) {
+        stored.subBottomOffset = 0;
+        chrome.storage.sync.set({ subBottomOffset: 0 }).catch(() => {});
+      }
       currentSettings = { ...currentSettings, ...stored };
 
       // Set General controls
       if (toggleEnabled) toggleEnabled.checked = currentSettings.enabled;
+      if (selectTranslationService) selectTranslationService.value = currentSettings.translationService || 'google';
       if (toggleBilingual) toggleBilingual.checked = currentSettings.displayMode === 'bilingual';
       if (checkHideNative) checkHideNative.checked = currentSettings.hideOriginalNative;
 
@@ -211,6 +218,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (toggleEnabled) {
     toggleEnabled.addEventListener('change', () => {
       currentSettings.enabled = toggleEnabled.checked;
+      saveSettings(true);
+    });
+  }
+
+  if (selectTranslationService) {
+    selectTranslationService.addEventListener('change', () => {
+      currentSettings.translationService = selectTranslationService.value;
       saveSettings(true);
     });
   }
@@ -280,7 +294,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnResetPos) {
     btnResetPos.addEventListener('click', () => {
-      currentSettings.subBottomOffset = 60;
+      currentSettings.subBottomOffset = 0;
       currentSettings.subPosition = 'bottom';
       saveSettings(true);
       showToast('Đã đặt lại vị trí');

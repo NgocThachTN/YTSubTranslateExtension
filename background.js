@@ -1,30 +1,32 @@
 /**
  * YouTube Subtitle Translator - Background Service Worker
- * Handles Google Translate API requests, caching, and default extension settings.
+ * Handles Multi-Engine Translation (Google Translate, YouTube Native, MyMemory, Google Cloud API),
+ * with dual-layer caching, automatic failover, and settings synchronization.
  */
 
 // In-memory cache for translations to reduce API calls and improve performance
 const translationCache = new Map();
-const MAX_CACHE_SIZE = 3000;
+const MAX_CACHE_SIZE = 4000;
 
 // Default configuration settings
 const DEFAULT_SETTINGS = {
   enabled: true,
   displayMode: 'bilingual', // 'bilingual' | 'vietnamese_only' | 'off'
+  translationService: 'google', // 'google' | 'youtube' | 'mymemory' | 'google_cloud'
   sourceLang: 'auto',
   targetLang: 'vi',
   fontSize: 20,
   fontColor: '#FFFFFF', // Clean white matching native YouTube subtitle color
-  originalColor: '#D1D5DB', // Soft light gray/white for original subtitle in bilingual mode
+  originalColor: '#FFFFFF', // Soft light gray/white for original subtitle in bilingual mode
   bgOpacity: 75, // 75% dark backdrop (YouTube native standard)
   subPosition: 'bottom', // 'bottom' | 'top'
-  subBottomOffset: 60, // px from bottom of video player
+  subBottomOffset: 0, // 0 = automatic responsive elevation above player controls
   hideOriginalNative: true, // Hide YouTube's native subtitle render to avoid overlap
   customApiKey: '', // Optional Google Cloud Translation API key
 };
 
 // Initialize default settings upon installation
-chrome.runtime.onInstalled.addListener(async (details) => {
+chrome.runtime.onInstalled.addListener(async () => {
   try {
     const existing = await chrome.storage.sync.get(Object.keys(DEFAULT_SETTINGS));
     const toSet = {};
@@ -33,10 +35,13 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         toSet[key] = value;
       }
     }
+    // Migrate legacy default 60 to 0
+    if (existing.subBottomOffset === 60) {
+      toSet.subBottomOffset = 0;
+    }
     if (Object.keys(toSet).length > 0) {
       await chrome.storage.sync.set(toSet);
     }
-    console.log('[YT Sub Translate] Extension initialized with settings:', { ...DEFAULT_SETTINGS, ...existing });
   } catch (err) {
     console.error('[YT Sub Translate] Failed to initialize settings:', err);
   }
@@ -124,19 +129,70 @@ async function translateWithFreeGoogleEndpoint(text, sourceLang, targetLang) {
     }
   }
 
-  throw new Error('All translation endpoints failed');
+  throw new Error('All Google translation endpoints failed');
 }
 
 /**
- * Handle translation requests with caching
+ * Fast script detection for CJK, Cyrillic, Arabic, etc.
  */
-async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi', apiKey = '' }) {
+function detectScriptLanguage(text) {
+  if (!text) return '';
+  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return 'ja';
+  if (/[\uAC00-\uD7AF\u1100-\u11FF]/.test(text)) return 'ko';
+  if (/[\u4E00-\u9FFF\u3400-\u4DBF]/.test(text)) return 'zh';
+  if (/[\u0400-\u04FF]/.test(text)) return 'ru';
+  if (/[\u0600-\u06FF]/.test(text)) return 'ar';
+  if (/[\u0E00-\u0E7F]/.test(text)) return 'th';
+  if (/[\u0370-\u03FF]/.test(text)) return 'el';
+  if (/[\u0590-\u05FF]/.test(text)) return 'he';
+  return '';
+}
+
+/**
+ * Translate text using MyMemory Translation API (Free Translation Memory engine)
+ */
+async function translateWithMyMemory(text, sourceLang, targetLang) {
+  let sl = sourceLang === 'auto' ? '' : sourceLang;
+  if (!sl) {
+    sl = detectScriptLanguage(text) || 'en';
+  }
+  const tl = targetLang || 'vi';
+  const pair = `${sl}|${tl}`;
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(pair)}`;
+
+  const res = await fetch(url, { keepalive: true });
+  if (!res.ok) {
+    throw new Error(`MyMemory HTTP ${res.status}`);
+  }
+
+  const data = await res.json();
+  const rawTrans = data?.responseData?.translatedText;
+  if (rawTrans && typeof rawTrans === 'string') {
+    const decoded = decodeHtmlEntities(rawTrans).trim();
+    const upper = decoded.toUpperCase();
+    const isWarning = upper.includes('MYMEMORY WARNING') || 
+                      upper.includes('INVALID LANGUAGE PAIR') || 
+                      upper.includes('NO QUERY SPECIFIED') ||
+                      upper.includes('DAILY LIMIT') ||
+                      upper.includes('QUERY LENGTH LIMIT');
+    const isUntranslated = decoded.toLowerCase() === text.trim().toLowerCase();
+    if (!isWarning && !isUntranslated && decoded.length > 0) {
+      return decoded;
+    }
+  }
+  throw new Error('MyMemory translation invalid, untranslated or quota exceeded');
+}
+
+/**
+ * Handle translation requests with caching and multi-engine routing
+ */
+async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi', service = 'google', apiKey = '' }) {
   const trimmed = (text || '').trim();
   if (!trimmed) {
     return { success: true, translation: '' };
   }
 
-  const cacheKey = `${sourceLang}->${targetLang}:${apiKey ? 'custom' : 'free'}:${trimmed}`;
+  const cacheKey = `${service}:${sourceLang}->${targetLang}:${apiKey ? 'custom' : 'free'}:${trimmed}`;
 
   // Check in-memory cache
   if (translationCache.has(cacheKey)) {
@@ -149,9 +205,18 @@ async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi',
 
   try {
     let translated = '';
+
     if (apiKey && apiKey.trim().length > 0) {
       translated = await translateWithGoogleCloudApi(trimmed, sourceLang, targetLang, apiKey.trim());
+    } else if (service === 'mymemory') {
+      try {
+        translated = await translateWithMyMemory(trimmed, sourceLang, targetLang);
+      } catch (err) {
+        console.warn('[YT Sub Translate] MyMemory failed, falling back to Google Translate...', err);
+        translated = await translateWithFreeGoogleEndpoint(trimmed, sourceLang, targetLang);
+      }
     } else {
+      // Default: Google Translate fast endpoints
       translated = await translateWithFreeGoogleEndpoint(trimmed, sourceLang, targetLang);
     }
 
@@ -182,12 +247,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     handleTranslation(request)
       .then((res) => sendResponse(res))
       .catch((err) => sendResponse({ success: false, error: err.message }));
-    return true; // Indicates asynchronous response
+    return true;
   }
 
   if (request.action === 'CLEAR_CACHE') {
     translationCache.clear();
-    console.log('[YT Sub Translate] Cache cleared.');
     sendResponse({ success: true, count: 0 });
     return true;
   }

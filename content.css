@@ -14,29 +14,47 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 56px;
   width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
   pointer-events: none;
   z-index: 59;
-  transition: bottom 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
+  /* Smooth animation matching YouTube control bar slide */
+  transition: bottom 0.25s cubic-bezier(0, 0, 0.2, 1);
+  --ytsub-base-bottom: 68px;
+  bottom: calc(var(--ytsub-base-bottom, 68px) + var(--ytsub-user-offset, 0px)) !important;
 }
 
-/* Adjust position when YouTube control bar is visible vs hidden */
-.ytp-autohide #ytsub-overlay-container {
-  bottom: 40px;
+/* When controls are hidden (video playing, mouse idle): move DOWN to native YouTube subtitle position */
+.html5-video-player.ytp-autohide #ytsub-overlay-container {
+  --ytsub-base-bottom: 18px;
 }
 
+/* When controls are visible (video paused, hover, seek): move UP just above the progress bar */
 .html5-video-player:not(.ytp-autohide) #ytsub-overlay-container {
-  bottom: 68px;
+  --ytsub-base-bottom: 68px;
+}
+
+/* Fullscreen mode adjustments */
+.html5-video-player.ytp-fullscreen.ytp-autohide #ytsub-overlay-container {
+  --ytsub-base-bottom: 24px;
+}
+
+.html5-video-player.ytp-fullscreen:not(.ytp-autohide) #ytsub-overlay-container {
+  --ytsub-base-bottom: 78px;
+}
+
+/* YouTube Shorts adjustments */
+ytd-shorts #ytsub-overlay-container,
+.reel-video-in-sequence #ytsub-overlay-container {
+  --ytsub-base-bottom: 100px;
 }
 
 /* Top position mode */
 #ytsub-overlay-container.ytsub-pos-top {
-  top: 36px;
+  top: 36px !important;
   bottom: auto !important;
 }
 
@@ -120,19 +138,4 @@
 /* Subtle loading indicator without blanking text */
 .ytsub-translating {
   opacity: 0.85;
-}
-
-/* YouTube Shorts specific styling */
-ytd-shorts #ytsub-overlay-container,
-.reel-video-in-sequence #ytsub-overlay-container {
-  bottom: 110px !important;
-  max-width: 90%;
-}
-
-/* Fullscreen adjustments */
-.ytp-fullscreen #ytsub-overlay-container {
-  bottom: 76px;
-}
-.ytp-fullscreen.ytp-autohide #ytsub-overlay-container {
-  bottom: 48px;
 }

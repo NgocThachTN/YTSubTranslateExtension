@@ -1,7 +1,6 @@
 /**
  * YouTube Subtitle Translator - Main World Interceptor (inject.js)
- * Runs in the main page world to intercept YouTube's timedtext subtitle tracks
- * and proactively fetch subtitle cues for 0ms instant pre-translation.
+ * Intercepts YouTube's timedtext subtitle tracks and supports YouTube's Native Subtitle Translation engine (&tlang=).
  */
 
 (() => {
@@ -10,16 +9,37 @@
   if (window.__ytsub_injected) return;
   window.__ytsub_injected = true;
 
+  let currentTargetLang = 'vi';
+  let currentService = 'google';
   let lastFetchedUrl = '';
 
-  function notifySubtitleData(url, text) {
-    if (!text || text.length < 20 || url === lastFetchedUrl) return;
-    lastFetchedUrl = url;
+  // Receive active configuration from content.js
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.source === 'YTSUB_CONTENT_CONFIG') {
+      if (event.data.targetLang) currentTargetLang = event.data.targetLang;
+      if (event.data.service) currentService = event.data.service;
+    }
+  });
+
+  function notifySubtitleData(url, text, isTranslated = false, explicitLang = '') {
+    if (!text || text.length < 20) return;
+    let captionLang = explicitLang;
+    if (!captionLang && url) {
+      try {
+        const match = url.match(/[?&]lang=([a-zA-Z-]+)/);
+        if (match && match[1]) {
+          captionLang = match[1];
+        }
+      } catch (e) {}
+    }
+
     window.postMessage({
       source: 'YTSUB_INJECT',
-      type: 'TIMEDTEXT_RESPONSE',
+      type: isTranslated ? 'TIMEDTEXT_TRANSLATED_RESPONSE' : 'TIMEDTEXT_RESPONSE',
       url: url,
       data: text,
+      targetLang: currentTargetLang,
+      captionLang: captionLang,
     }, '*');
   }
 
@@ -38,7 +58,8 @@
       this.addEventListener('load', function() {
         try {
           if (this.responseText) {
-            notifySubtitleData(targetUrl, this.responseText);
+            const hasTlang = targetUrl.includes('tlang=');
+            notifySubtitleData(targetUrl, this.responseText, hasTlang);
           }
         } catch (e) {}
       });
@@ -55,14 +76,15 @@
       if (url && typeof url === 'string' && url.includes('/api/timedtext')) {
         const clone = response.clone();
         clone.text().then((text) => {
-          notifySubtitleData(url, text);
+          const hasTlang = url.includes('tlang=');
+          notifySubtitleData(url, text, hasTlang);
         }).catch(() => {});
       }
     } catch (e) {}
     return response;
   };
 
-  // 3. Proactive check on YouTube player caption tracks
+  // 3. Proactively fetch caption track (including YouTube Native Subtitle Translation)
   function inspectPlayerCaptions() {
     try {
       const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
@@ -72,27 +94,49 @@
       const tracklist = player.getOption('captions', 'tracklist');
       const target = track || (tracklist && tracklist[0]);
 
-      if (target && target.baseUrl && target.baseUrl !== lastFetchedUrl) {
-        origFetch(target.baseUrl)
+      if (target && target.baseUrl) {
+        const trackLang = target.languageCode || '';
+        const fetchKey = `${target.baseUrl}:${currentTargetLang}:${currentService}`;
+        if (fetchKey === lastFetchedUrl) return;
+        lastFetchedUrl = fetchKey;
+
+        // If service is YouTube Native or as secondary fast translation, fetch with &tlang
+        const nativeUrl = target.baseUrl.includes('tlang=')
+          ? target.baseUrl
+          : `${target.baseUrl}&tlang=${encodeURIComponent(currentTargetLang)}&fmt=json3`;
+
+        origFetch(nativeUrl)
           .then((res) => res.text())
           .then((text) => {
-            notifySubtitleData(target.baseUrl, text);
+            if (text && text.includes('events')) {
+              notifySubtitleData(nativeUrl, text, true, trackLang);
+            } else {
+              // Fallback to original track
+              origFetch(`${target.baseUrl}&fmt=json3`)
+                .then((r) => r.text())
+                .then((origText) => notifySubtitleData(target.baseUrl, origText, false, trackLang))
+                .catch(() => {});
+            }
           })
-          .catch(() => {});
+          .catch(() => {
+            origFetch(`${target.baseUrl}&fmt=json3`)
+              .then((r) => r.text())
+              .then((origText) => notifySubtitleData(target.baseUrl, origText, false, trackLang))
+              .catch(() => {});
+          });
       }
     } catch (e) {}
   }
 
-  // Periodic and event-driven inspection
   window.addEventListener('yt-navigate-finish', () => {
     lastFetchedUrl = '';
-    setTimeout(inspectPlayerCaptions, 500);
-    setTimeout(inspectPlayerCaptions, 1500);
+    setTimeout(inspectPlayerCaptions, 400);
+    setTimeout(inspectPlayerCaptions, 1200);
   });
 
   window.addEventListener('load', () => {
-    setTimeout(inspectPlayerCaptions, 1000);
+    setTimeout(inspectPlayerCaptions, 800);
   });
 
-  setInterval(inspectPlayerCaptions, 3000);
+  setInterval(inspectPlayerCaptions, 2500);
 })();

@@ -1,9 +1,9 @@
 /**
- * YouTube Subtitle Translator - Content Script (High Performance Engine)
+ * YouTube Subtitle Translator - Content Script (High Performance Multi-Engine)
  * Features:
- * - Authentic YouTube native subtitle styling (tight inline segment background)
+ * - Authentic YouTube native subtitle styling (unified caption-window)
  * - Atomic simultaneous display: original and translated lines appear at the exact same instant
- * - 0ms instant display with pre-cached TimedText tracks from inject.js
+ * - Multi-engine support: YouTube Native Subtitles (&tlang=), Google Translate, MyMemory Translated
  * - High-speed Keep-Alive direct fetch with AbortController
  */
 
@@ -14,6 +14,7 @@
   let settings = {
     enabled: true,
     displayMode: 'bilingual', // 'bilingual' | 'vietnamese_only' | 'off'
+    translationService: 'google', // 'google' | 'youtube' | 'mymemory' | 'google_cloud'
     sourceLang: 'auto',
     targetLang: 'vi',
     fontSize: 20,
@@ -21,7 +22,7 @@
     originalColor: '#FFFFFF',
     bgOpacity: 75,
     subPosition: 'bottom',
-    subBottomOffset: 60,
+    subBottomOffset: 0, // 0 = automatic responsive elevation above player controls
     hideOriginalNative: true,
     customApiKey: '',
   };
@@ -46,9 +47,9 @@
   let translatedTextElement = null;
   let isDragging = false;
   let startY = 0;
-  let startBottom = 60;
   let pretranslateQueue = [];
   let isPretranslating = false;
+  let detectedCaptionLang = '';
 
   /**
    * Normalize string for fast cache keys
@@ -74,13 +75,71 @@
   }
 
   /**
+   * Fast script detection for CJK, Cyrillic, Arabic, Thai, etc.
+   */
+  function detectScriptLanguage(text) {
+    if (!text) return '';
+    // Japanese: Hiragana or Katakana
+    if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return 'ja';
+    // Korean: Hangul
+    if (/[\uAC00-\uD7AF\u1100-\u11FF]/.test(text)) return 'ko';
+    // Chinese: Han characters without Kana
+    if (/[\u4E00-\u9FFF\u3400-\u4DBF]/.test(text)) return 'zh';
+    // Russian / Cyrillic
+    if (/[\u0400-\u04FF]/.test(text)) return 'ru';
+    // Arabic
+    if (/[\u0600-\u06FF]/.test(text)) return 'ar';
+    // Thai
+    if (/[\u0E00-\u0E7F]/.test(text)) return 'th';
+    // Greek
+    if (/[\u0370-\u03FF]/.test(text)) return 'el';
+    // Hebrew
+    if (/[\u0590-\u05FF]/.test(text)) return 'he';
+    return '';
+  }
+
+  /**
+   * Determine exact source language code (e.g. ja, ko, en) when auto-detection is active
+   */
+  function resolveSourceLang(text, configuredSourceLang) {
+    if (configuredSourceLang && configuredSourceLang !== 'auto') {
+      return configuredSourceLang;
+    }
+    const detected = detectScriptLanguage(text);
+    if (detected) {
+      return detected;
+    }
+    if (detectedCaptionLang) {
+      return detectedCaptionLang;
+    }
+    return 'en';
+  }
+
+  /**
+   * Send config to inject.js in main world
+   */
+  function syncConfigToMainWorld() {
+    window.postMessage({
+      source: 'YTSUB_CONTENT_CONFIG',
+      targetLang: settings.targetLang || 'vi',
+      service: settings.translationService || 'google',
+    }, '*');
+  }
+
+  /**
    * Load settings from storage
    */
   async function loadSettings() {
     try {
       const stored = await chrome.storage.sync.get(Object.keys(settings));
+      // Auto-migrate legacy default 60 to 0 (0 = automatic responsive elevation above player controls)
+      if (stored.subBottomOffset === 60) {
+        stored.subBottomOffset = 0;
+        chrome.storage.sync.set({ subBottomOffset: 0 }).catch(() => {});
+      }
       settings = { ...settings, ...stored };
       applySettings();
+      syncConfigToMainWorld();
     } catch (err) {
       console.warn('[YT ViSub] Could not load settings:', err);
     }
@@ -134,11 +193,14 @@
 
     if (settings.subPosition === 'top') {
       overlayContainer.classList.add('ytsub-pos-top');
-      overlayContainer.style.bottom = 'auto';
     } else {
       overlayContainer.classList.remove('ytsub-pos-top');
-      if (!isDragging && settings.subBottomOffset !== undefined) {
-        overlayContainer.style.bottom = `${settings.subBottomOffset}px`;
+      if (!isDragging) {
+        if (settings.subBottomOffset && settings.subBottomOffset !== 0) {
+          overlayContainer.style.setProperty('--ytsub-user-offset', `${settings.subBottomOffset}px`);
+        } else {
+          overlayContainer.style.removeProperty('--ytsub-user-offset');
+        }
       }
     }
   }
@@ -158,7 +220,6 @@
       box.id = 'ytsub-inner-box';
       box.classList.add('ytsub-hidden');
 
-      // Original text line wrapper
       const origWrap = document.createElement('div');
       origWrap.id = 'ytsub-orig-wrapper';
       origWrap.className = 'ytsub-line-wrapper';
@@ -168,7 +229,6 @@
       origText.className = 'ytsub-line';
       origWrap.appendChild(origText);
 
-      // Translated text line wrapper
       const transWrap = document.createElement('div');
       transWrap.id = 'ytsub-trans-wrapper';
       transWrap.className = 'ytsub-line-wrapper';
@@ -201,13 +261,15 @@
    * Vertical drag handler
    */
   function setupDraggable(box, container, player) {
+    let startUserOffset = 0;
+
     const onMouseDown = (e) => {
       if (e.button !== 0) return;
       isDragging = true;
       startY = e.clientY;
-      const rect = container.getBoundingClientRect();
-      const playerRect = player.getBoundingClientRect();
-      startBottom = playerRect.bottom - rect.bottom;
+      const currentProp = container.style.getPropertyValue('--ytsub-user-offset');
+      startUserOffset = currentProp ? parseInt(currentProp, 10) || 0 : (settings.subBottomOffset || 0);
+      container.style.transition = 'none';
 
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
@@ -217,52 +279,110 @@
     const onMouseMove = (e) => {
       if (!isDragging) return;
       const deltaY = startY - e.clientY;
-      const newBottom = Math.max(20, Math.min(player.clientHeight - 80, startBottom + deltaY));
-      container.style.bottom = `${newBottom}px`;
+      const newOffset = Math.max(-60, Math.min(player.clientHeight - 150, startUserOffset + deltaY));
+      container.style.setProperty('--ytsub-user-offset', `${newOffset}px`);
     };
 
     const onMouseUp = () => {
       if (!isDragging) return;
       isDragging = false;
+      container.style.removeProperty('transition');
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
 
-      const newBottom = parseInt(container.style.bottom, 10);
-      if (!isNaN(newBottom)) {
-        settings.subBottomOffset = newBottom;
-        chrome.storage.sync.set({ subBottomOffset: newBottom }).catch(() => {});
-      }
+      const prop = container.style.getPropertyValue('--ytsub-user-offset');
+      const savedOffset = prop ? parseInt(prop, 10) || 0 : 0;
+      settings.subBottomOffset = savedOffset;
+      chrome.storage.sync.set({ subBottomOffset: savedOffset }).catch(() => {});
     };
 
     box.addEventListener('mousedown', onMouseDown);
   }
 
   /**
-   * Fast direct translation using fetch with connection reuse
+   * Fast direct translation (Google Translate or MyMemory with auto failover)
    */
-  async function fetchDirectTranslation(text, sourceLang, targetLang, signal) {
+  async function fetchDirectTranslation(text, sourceLang, targetLang, service, signal) {
     const sl = sourceLang || 'auto';
     const tl = targetLang || 'vi';
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(text)}`;
 
-    const res = await fetch(url, {
-      method: 'GET',
-      signal: signal,
-      keepalive: true,
-    });
+    // If MyMemory engine selected
+    if (service === 'mymemory') {
+      const resolvedSl = resolveSourceLang(text, sl);
+      const pair = `${resolvedSl}|${tl}`;
+      try {
+        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(pair)}`;
+        const timeoutController = new AbortController();
+        const timeoutTimer = setTimeout(() => timeoutController.abort(), 2000);
+        const onAbort = () => timeoutController.abort();
+        if (signal) signal.addEventListener('abort', onAbort);
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+        const res = await fetch(url, { signal: timeoutController.signal, keepalive: true });
+        clearTimeout(timeoutTimer);
+        if (signal) signal.removeEventListener('abort', onAbort);
+
+        if (res.ok) {
+          const json = await res.json();
+          const rawTrans = json.responseData?.translatedText;
+          if (rawTrans && typeof rawTrans === 'string') {
+            const decoded = decodeHtmlEntities(rawTrans).trim();
+            const upper = decoded.toUpperCase();
+            const isWarning = upper.includes('MYMEMORY WARNING') || 
+                              upper.includes('INVALID LANGUAGE PAIR') || 
+                              upper.includes('NO QUERY SPECIFIED') ||
+                              upper.includes('DAILY LIMIT') ||
+                              upper.includes('QUERY LENGTH LIMIT');
+            const isUntranslated = decoded.toLowerCase() === text.trim().toLowerCase();
+            
+            if (!isWarning && !isUntranslated && decoded.length > 0) {
+              return decoded;
+            }
+          }
+        }
+      } catch (err) {
+        if (err.name === 'AbortError' && signal && signal.aborted) {
+          throw err;
+        }
+      }
+      // If MyMemory failed, timed out, or returned invalid/untranslated text:
+      // Silently fall back to Google Translate!
     }
 
-    const data = await res.json();
-    if (Array.isArray(data) && Array.isArray(data[0])) {
-      const translated = data[0]
-        .map((item) => (Array.isArray(item) && item[0] ? item[0] : ''))
-        .join('');
-      return decodeHtmlEntities(translated);
+    // Google Translate Primary: gtx
+    try {
+      const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(text)}`;
+      const res = await fetch(gtxUrl, { method: 'GET', signal, keepalive: true });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && Array.isArray(data[0])) {
+          const translated = data[0]
+            .map((item) => (Array.isArray(item) && item[0] ? item[0] : ''))
+            .join('');
+          if (translated) {
+            return decodeHtmlEntities(translated);
+          }
+        }
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') throw e;
     }
-    throw new Error('Invalid translation format');
+
+    // Google Translate Backup: clients5
+    try {
+      const backupUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&q=${encodeURIComponent(text)}`;
+      const backupRes = await fetch(backupUrl, { method: 'GET', signal, keepalive: true });
+      if (backupRes.ok) {
+        const backupData = await backupRes.json();
+        const result = Array.isArray(backupData) ? backupData[0] : backupData;
+        if (result && typeof result === 'string' && result.trim()) {
+          return decodeHtmlEntities(result.trim());
+        }
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') throw e;
+    }
+
+    throw new Error('All direct translation endpoints failed');
   }
 
   /**
@@ -272,7 +392,8 @@
     const trimmed = normalizeText(text);
     if (!trimmed) return '';
 
-    const cacheKey = `${settings.sourceLang || 'auto'}->${settings.targetLang || 'vi'}:${trimmed}`;
+    const service = settings.translationService || 'google';
+    const cacheKey = `${service}:${settings.sourceLang || 'auto'}->${settings.targetLang || 'vi'}:${trimmed}`;
 
     // 1. Check local synchronous cache (0ms instant return!)
     if (localCache.has(cacheKey)) {
@@ -295,11 +416,12 @@
           trimmed,
           settings.sourceLang || 'auto',
           settings.targetLang || 'vi',
+          service,
           currentSignal
         );
       } catch (err) {
         if (err.name === 'AbortError') {
-          return null; // Cancelled
+          return null;
         }
       }
     }
@@ -312,18 +434,17 @@
           text: trimmed,
           sourceLang: settings.sourceLang || 'auto',
           targetLang: settings.targetLang || 'vi',
+          service: service,
           apiKey: settings.customApiKey || '',
         });
         if (response && response.success) {
           translated = response.translation;
         }
-      } catch (e) {
-        // Ignored or aborted
-      }
+      } catch (e) {}
     }
 
-    // 5. Store in local cache
-    if (translated) {
+    // 5. Store in local cache (only store genuine non-empty translations)
+    if (translated && translated.trim().toLowerCase() !== trimmed.toLowerCase()) {
       if (localCache.size >= MAX_LOCAL_CACHE) {
         const firstKey = localCache.keys().next().value;
         localCache.delete(firstKey);
@@ -331,7 +452,7 @@
       localCache.set(cacheKey, translated);
     }
 
-    return translated || trimmed;
+    return translated || '';
   }
 
   /**
@@ -371,10 +492,10 @@
     }
 
     if (translatedTextElement) {
-      translatedTextElement.textContent = transText;
+      translatedTextElement.textContent = transText || '';
     }
     if (transWrapper) {
-      transWrapper.style.display = 'block';
+      transWrapper.style.display = transText ? 'block' : 'none';
     }
 
     innerBox.classList.remove('ytsub-hidden');
@@ -392,7 +513,6 @@
 
     const currentText = extractCaptionText();
 
-    // If subtitles are currently empty or CC turned off
     if (!currentText) {
       lastCaptionText = '';
       if (innerBox) {
@@ -403,7 +523,6 @@
       return;
     }
 
-    // If subtitle content has not changed, do nothing
     if (currentText === lastCaptionText) {
       return;
     }
@@ -411,22 +530,22 @@
     lastCaptionText = currentText;
 
     // Check if translation is already in local synchronous cache
-    const cacheKey = `${settings.sourceLang || 'auto'}->${settings.targetLang || 'vi'}:${currentText}`;
+    const service = settings.translationService || 'google';
+    const cacheKey = `${service}:${settings.sourceLang || 'auto'}->${settings.targetLang || 'vi'}:${currentText}`;
     let translated = localCache.get(cacheKey);
 
     if (translated) {
-      // 0ms INSTANT DISPLAY: render both simultaneously right now
       renderSubtitlesSimultaneously(currentText, translated);
       return;
     }
 
-    // If not in cache yet: fetch translation FIRST, then display both together!
-    // This prevents showing the original subtitle alone and having translation pop in later.
+    // Fetch translation first, then display both simultaneously
     const result = await translateTextFast(currentText);
 
-    // Only render if this caption is still the active one
-    if (result && currentText === lastCaptionText) {
-      renderSubtitlesSimultaneously(currentText, result);
+    if (currentText === lastCaptionText) {
+      const isDuplicate = result && result.trim().toLowerCase() === currentText.trim().toLowerCase() && detectScriptLanguage(currentText);
+      const safeTrans = isDuplicate ? '' : (result || '');
+      renderSubtitlesSimultaneously(currentText, safeTrans);
     }
   }
 
@@ -437,7 +556,6 @@
     const texts = [];
     if (!data || typeof data !== 'string') return texts;
 
-    // Try JSON3 format
     if (data.trim().startsWith('{')) {
       try {
         const json = JSON.parse(data);
@@ -456,7 +574,6 @@
       } catch (e) {}
     }
 
-    // Try XML format
     if (data.includes('<text')) {
       const regex = /<text\s+start="[^"]*"\s+dur="[^"]*"[^>]*>([\s\S]*?)<\/text>/g;
       let match;
@@ -472,18 +589,44 @@
   }
 
   /**
+   * Parse pre-translated JSON3 from YouTube Native Translation (&tlang=)
+   */
+  function parseYouTubeNativeTranslatedData(data) {
+    if (!data || typeof data !== 'string' || !data.trim().startsWith('{')) return;
+    try {
+      const json = JSON.parse(data);
+      if (json.events && Array.isArray(json.events)) {
+        const service = settings.translationService || 'google';
+        const sl = settings.sourceLang || 'auto';
+        const tl = settings.targetLang || 'vi';
+
+        json.events.forEach((e) => {
+          if (e.segs) {
+            const translatedText = normalizeText(e.segs.map((s) => s.utf8 || '').join(''));
+            if (translatedText && translatedText.length > 1) {
+              localCache.set(`${service}:${sl}->${tl}:${translatedText}`, translatedText);
+            }
+          }
+        });
+        console.log(`[YT ViSub] YouTube Native pre-translated cues loaded. Cache: ${localCache.size}`);
+      }
+    } catch (e) {}
+  }
+
+  /**
    * Pre-translate batches of sentences in the background for 0ms playback
    */
   async function processPretranslationQueue() {
     if (isPretranslating || pretranslateQueue.length === 0) return;
     isPretranslating = true;
 
+    const service = settings.translationService || 'google';
+    const sl = settings.sourceLang || 'auto';
+    const tl = settings.targetLang || 'vi';
+
     while (pretranslateQueue.length > 0) {
       const batch = pretranslateQueue.splice(0, 25);
-      const sl = settings.sourceLang || 'auto';
-      const tl = settings.targetLang || 'vi';
-
-      const toTranslate = batch.filter((txt) => !localCache.has(`${sl}->${tl}:${txt}`));
+      const toTranslate = batch.filter((txt) => !localCache.has(`${service}:${sl}->${tl}:${txt}`));
       if (toTranslate.length === 0) continue;
 
       try {
@@ -500,14 +643,12 @@
             toTranslate.forEach((orig, idx) => {
               const trans = (translatedLines[idx] || '').trim();
               if (trans) {
-                localCache.set(`${sl}->${tl}:${orig}`, trans);
+                localCache.set(`${service}:${sl}->${tl}:${orig}`, trans);
               }
             });
           }
         }
-      } catch (e) {
-        // Best effort pre-translation
-      }
+      } catch (e) {}
 
       await new Promise((r) => setTimeout(r, 120));
     }
@@ -519,7 +660,15 @@
    * Listen for intercepted timedtext subtitles from inject.js
    */
   window.addEventListener('message', (event) => {
-    if (event.data && event.data.source === 'YTSUB_INJECT' && event.data.type === 'TIMEDTEXT_RESPONSE') {
+    if (!event.data || event.data.source !== 'YTSUB_INJECT') return;
+
+    if (event.data.captionLang) {
+      detectedCaptionLang = event.data.captionLang;
+    }
+
+    if (event.data.type === 'TIMEDTEXT_TRANSLATED_RESPONSE') {
+      parseYouTubeNativeTranslatedData(event.data.data);
+    } else if (event.data.type === 'TIMEDTEXT_RESPONSE') {
       const texts = parseTimedTextData(event.data.data);
       if (texts.length > 0) {
         pretranslateQueue.push(...texts);
@@ -565,6 +714,7 @@
     playerElement = player;
     setupOverlay(player);
     observeCaptionContainer();
+    syncConfigToMainWorld();
     return true;
   }
 
@@ -586,11 +736,13 @@
 
     window.addEventListener('yt-navigate-finish', () => {
       lastCaptionText = '';
+      detectedCaptionLang = '';
       setTimeout(() => initPlayer(), 200);
     });
 
     window.addEventListener('spfdone', () => {
       lastCaptionText = '';
+      detectedCaptionLang = '';
       setTimeout(() => initPlayer(), 200);
     });
 
@@ -611,6 +763,7 @@
         settings[key] = change.newValue;
       }
       applySettings();
+      syncConfigToMainWorld();
       if (lastCaptionText) {
         const text = lastCaptionText;
         lastCaptionText = '';
