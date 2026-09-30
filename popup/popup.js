@@ -483,8 +483,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const pct = Math.min(100, Math.round((requestsToday / maxRpd) * 100));
       if (quotaProgressFill) quotaProgressFill.style.width = `${pct}%`;
-      if (quotaUsagePercent) quotaUsagePercent.textContent = `${pct}% Quota ngày đã dùng`;
-      if (quotaKeyPool) quotaKeyPool.textContent = `${keyCount} API Key (${maxRpd.toLocaleString()} RPD)`;
+      if (quotaUsagePercent) quotaUsagePercent.textContent = `${pct}%`;
+      if (quotaKeyPool) quotaKeyPool.textContent = keyCount > 1 ? `${keyCount} Keys (${maxRpd.toLocaleString()})` : `1 Key (1.500)`;
     } catch (_) {}
   }
 

@@ -380,58 +380,71 @@
 
             <div id="quota-status-banner" class="status-badge"></div>
 
-            <!-- Inset Stats Box matching native app style -->
-            <div class="stats-inset-box">
-              <div class="stats-line">
-                <span class="stats-title">Yêu cầu hôm nay (RPD)</span>
-                <span class="stats-dots"></span>
-                <span id="stat-requests-today" class="stats-value">0 / 1.500</span>
+            <!-- 3x3 Quota & System Matrix Grid -->
+            <div class="quota-matrix-grid">
+              <!-- Ô 1: Yêu cầu hôm nay -->
+              <div class="quota-matrix-cell">
+                <span class="cell-label">Hôm nay (RPD)</span>
+                <span id="stat-requests-today" class="cell-value">0 / 1.500</span>
+                <span class="cell-hint">Định mức ngày</span>
               </div>
 
-              <!-- Sleek inline progress bar -->
-              <div class="stats-progress-track">
-                <div id="quota-progress-fill" class="stats-progress-bar" style="width: 0%;"></div>
+              <!-- Ô 2: Hạn mức ngày đã dùng -->
+              <div class="quota-matrix-cell">
+                <span class="cell-label">Đã dùng hôm nay</span>
+                <span id="quota-usage-percent" class="cell-value">0%</span>
+                <div class="stats-progress-track">
+                  <div id="quota-progress-fill" class="stats-progress-bar" style="width: 0%;"></div>
+                </div>
               </div>
 
-              <div class="stats-line">
-                <span class="stats-title">Hạn mức ngày đã dùng</span>
-                <span class="stats-dots"></span>
-                <span id="quota-usage-percent" class="stats-value">0%</span>
+              <!-- Ô 3: Điều tốc an toàn -->
+              <div class="quota-matrix-cell">
+                <span class="cell-label">Điều tốc an toàn</span>
+                <span id="stat-pacing-speed" class="cell-value">≤ 15 RPM</span>
+                <span class="cell-hint">Bảo vệ hạn mức</span>
               </div>
-              <div class="stats-line">
-                <span class="stats-title">Câu đã dịch bằng AI</span>
-                <span class="stats-dots"></span>
-                <span id="stat-cues-translated" class="stats-value text-accent">0</span>
+
+              <!-- Ô 4: Câu đã dịch AI -->
+              <div class="quota-matrix-cell">
+                <span class="cell-label">Đã dịch bằng AI</span>
+                <span id="stat-cues-translated" class="cell-value text-accent">0</span>
+                <span class="cell-hint">Câu phụ đề</span>
               </div>
-              <div class="stats-line">
-                <span class="stats-title">Tiết kiệm nhờ Lọc âm & Cache</span>
-                <span class="stats-dots"></span>
-                <span id="stat-quota-saved" class="stats-value text-accent">0 câu</span>
+
+              <!-- Ô 5: Tiết kiệm nhờ Lọc âm & Cache -->
+              <div class="quota-matrix-cell">
+                <span class="cell-label">Tiết kiệm Quota</span>
+                <span id="stat-quota-saved" class="cell-value text-accent">0 câu</span>
+                <span class="cell-hint">Lọc âm & Cache</span>
               </div>
-              <div class="stats-line">
-                <span class="stats-title">Điều tốc an toàn (Pacing)</span>
-                <span class="stats-dots"></span>
-                <span id="stat-pacing-speed" class="stats-value">≤ 15 RPM</span>
+
+              <!-- Ô 6: Kho khóa API -->
+              <div class="quota-matrix-cell">
+                <span class="cell-label">Kho khóa API</span>
+                <span id="quota-key-pool" class="cell-value">1 Key (1.500)</span>
+                <span class="cell-hint">Đảo key tự động</span>
               </div>
-              <div class="stats-line">
-                <span class="stats-title">Kho khóa API khả dụng</span>
-                <span class="stats-dots"></span>
-                <span id="quota-key-pool" class="stats-value">1 Key (1.500 RPD)</span>
+
+              <!-- Ô 7: Công nghệ đồng bộ -->
+              <div class="quota-matrix-cell">
+                <span class="cell-label">Công nghệ đồng bộ</span>
+                <span class="cell-value">Main World</span>
+                <span class="cell-hint">Interceptor V3</span>
               </div>
-              <div class="stats-line">
-                <span class="stats-title">Công nghệ đồng bộ</span>
-                <span class="stats-dots"></span>
-                <span class="stats-value">Main World Interceptor</span>
+
+              <!-- Ô 8: Phiên bản giao thức -->
+              <div class="quota-matrix-cell">
+                <span class="cell-label">Phiên bản giao thức</span>
+                <span class="cell-value">Manifest V3</span>
+                <span class="cell-hint">Google Chrome API</span>
               </div>
-              <div class="stats-line">
-                <span class="stats-title">Phiên bản giao thức</span>
-                <span class="stats-dots"></span>
-                <span class="stats-value">Manifest V3</span>
-              </div>
-              <div class="stats-line">
-                <span class="stats-title">Bộ nhớ đệm phiên</span>
-                <span class="stats-dots"></span>
-                <span class="stats-value text-accent">Kích hoạt</span>
+
+              <!-- Ô 9: Bộ nhớ đệm phiên -->
+              <div class="quota-matrix-cell">
+                <span class="cell-label">Bộ nhớ đệm phiên</span>
+                <span class="cell-value text-accent">Kích hoạt</span>
+                <span class="cell-hint">Phản hồi 0ms</span>
               </div>
             </div>
 
