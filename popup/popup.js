@@ -451,11 +451,42 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   /**
+   * Return current date in Pacific Time (America/Los_Angeles) matching Google AI Studio reset
+   */
+  function getQuotaDateKey() {
+    try {
+      return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+    } catch (_) {
+      return new Date().toISOString().slice(0, 10);
+    }
+  }
+
+  /**
+   * Update real-time countdown to midnight Pacific Time (00:00 PST/PDT)
+   */
+  function updateQuotaCountdown() {
+    try {
+      const countdownEl = document.getElementById('quota-reset-countdown');
+      if (!countdownEl) return;
+      const now = new Date();
+      const ptStr = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+      const ptDate = new Date(ptStr);
+      const ptMidnight = new Date(ptDate);
+      ptMidnight.setHours(24, 0, 0, 0);
+      const diffMs = Math.max(0, ptMidnight.getTime() - ptDate.getTime());
+      const hours = Math.floor(diffMs / 3600000);
+      const minutes = Math.floor((diffMs % 3600000) / 60000);
+      countdownEl.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" style="vertical-align: -1px; margin-right: 4px; opacity: 0.8;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>Đặt lại sau: ${hours}h ${minutes < 10 ? '0' : ''}${minutes}p`;
+    } catch (_) {}
+  }
+
+  /**
    * Load and render real-time Gemini Quota & Usage Stats
    */
   async function loadQuotaStats() {
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      updateQuotaCountdown();
+      const today = getQuotaDateKey();
       const data = await chrome.storage.local.get([
         'gemini_requests_today',
         'gemini_requests_date',
@@ -732,5 +763,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   await loadSettings();
+  updateQuotaCountdown();
+  setInterval(updateQuotaCountdown, 30000);
   checkForUpdates(false);
 });

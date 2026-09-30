@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "YouTube Subtitle Translator - Dịch Phụ Đề Tiếng Việt",
   "short_name": "YT ViSub",
-  "version": "1.5.9",
+  "version": "1.6.0",
   "description": "Tự động dịch phụ đề YouTube sang Tiếng Việt bằng đa dịch vụ (Google Gemini AI, YouTube Subtitles, Google Translate, MyMemory).",
   "permissions": [
     "storage"

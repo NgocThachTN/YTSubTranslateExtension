@@ -1031,6 +1031,14 @@ body::-webkit-scrollbar-thumb {
   color: var(--text-muted);
 }
 
+.quota-countdown-text {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-sub);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
 /* 3x2 Matrix Grid */
 .quota-matrix-grid {
   display: grid;

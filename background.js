@@ -742,11 +742,22 @@ function getNextGeminiApiKey(rawKey) {
 }
 
 /**
+ * Return current date in Pacific Time (America/Los_Angeles) matching Google AI Studio reset
+ */
+function getQuotaDateKey() {
+  try {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+  } catch (_) {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+/**
  * Record quota usage in chrome.storage.local
  */
 async function recordGeminiQuotaUsage(linesCount = 1) {
   try {
-    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    const today = getQuotaDateKey(); // Pacific Time 'YYYY-MM-DD'
     const data = await chrome.storage.local.get([
       'gemini_requests_today',
       'gemini_requests_date',
@@ -1096,7 +1107,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return;
       }
 
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getQuotaDateKey();
       const stats = await chrome.storage.local.get([
         'gemini_requests_today',
         'gemini_requests_date',
