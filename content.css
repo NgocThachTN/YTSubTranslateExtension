@@ -1,8 +1,8 @@
 /* ==========================================================================
-   YouTube Subtitle Translator - Content Styles
+   YouTube Subtitle Translator - Authentic YouTube Native Caption Styles
    ========================================================================== */
 
-/* Hide native YouTube captions when our custom translator is active */
+/* Hide native YouTube captions cleanly when custom translator is active */
 .ytsub-hide-native .ytp-caption-window-container {
   opacity: 0 !important;
   pointer-events: none !important;
@@ -14,51 +14,48 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 60px;
+  bottom: 56px;
   width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  pointer-events: none; /* Let video clicks pass through */
-  z-index: 59; /* Right above video and below player controls */
-  transition: bottom 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
+  pointer-events: none;
+  z-index: 59;
+  transition: bottom 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
 }
 
-/* Adjust position when YouTube control bar is visible */
+/* Adjust position when YouTube control bar is visible vs hidden */
 .ytp-autohide #ytsub-overlay-container {
-  bottom: 45px;
+  bottom: 40px;
 }
 
 .html5-video-player:not(.ytp-autohide) #ytsub-overlay-container {
-  bottom: 75px;
+  bottom: 68px;
 }
 
 /* Top position mode */
 #ytsub-overlay-container.ytsub-pos-top {
-  top: 40px;
+  top: 36px;
   bottom: auto !important;
 }
 
-/* Inner box wrapper for subtitles */
+/* Unified subtitle box: ONE cohesive block matching YouTube native caption-window */
 #ytsub-inner-box {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   max-width: 88%;
-  padding: 8px 16px;
-  border-radius: 8px;
-  background-color: rgba(10, 12, 18, 0.65);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  pointer-events: auto; /* Enable hover / drag */
+  padding: 4px 10px;
+  border-radius: 4px;
+  background-color: rgba(8, 8, 8, 0.75);
+  box-shadow: none;
+  border: none;
+  pointer-events: auto;
   cursor: grab;
   text-align: center;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
   line-height: 1.35;
-  transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+  transition: background-color 0.15s ease;
 }
 
 #ytsub-inner-box:active {
@@ -69,60 +66,73 @@
   display: none !important;
 }
 
-/* Subtitle lines */
-.ytsub-line {
-  font-family: "YouTube Noto", Roboto, "Segoe UI", Arial, Helvetica, sans-serif;
-  font-weight: 600;
-  letter-spacing: 0.2px;
+/* Line wrappers inside the unified box */
+.ytsub-line-wrapper {
   text-align: center;
-  transition: color 0.2s ease, font-size 0.2s ease;
-  text-shadow: 
-    -1px -1px 0 #000,  
-     1px -1px 0 #000,
-    -1px  1px 0 #000,
-     1px  1px 0 #000,
-     0px 2px 4px rgba(0, 0, 0, 0.85);
+  max-width: 100%;
+  line-height: normal;
+}
+
+/* Subtitle text typography */
+.ytsub-line {
+  display: inline;
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  color: #FFFFFF;
+  font-family: "YouTube Noto", Roboto, "Arial Unicode Ms", Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif;
+  letter-spacing: 0.1px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: center;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.85);
 }
 
 /* Original subtitle line (Bilingual mode top line) */
 #ytsub-original-text {
+  font-size: 0.9em;
   color: #FFFFFF;
-  opacity: 0.88;
-  margin-bottom: 3px;
-  font-size: 0.88em;
+  opacity: 0.92;
 }
 
-#ytsub-original-text:empty {
-  display: none;
+#ytsub-orig-wrapper {
+  margin-bottom: 2px;
 }
 
-/* Vietnamese translated subtitle line (Bottom line or solo line) */
+#ytsub-original-text:empty,
+#ytsub-orig-wrapper.ytsub-hidden {
+  display: none !important;
+}
+
+/* Vietnamese translated subtitle line */
 #ytsub-translated-text {
-  color: #FFE600;
   font-size: 1.05em;
-  font-weight: 700;
+  color: #FFFFFF;
+  font-weight: 500;
 }
 
-#ytsub-translated-text:empty {
-  display: none;
+#ytsub-translated-text:empty,
+#ytsub-trans-wrapper.ytsub-hidden {
+  display: none !important;
 }
 
-/* Loading subtle animation if translating new sentence */
+/* Subtle loading indicator without blanking text */
 .ytsub-translating {
-  opacity: 0.75;
+  opacity: 0.85;
 }
 
 /* YouTube Shorts specific styling */
 ytd-shorts #ytsub-overlay-container,
 .reel-video-in-sequence #ytsub-overlay-container {
-  bottom: 120px !important;
-  max-width: 92%;
+  bottom: 110px !important;
+  max-width: 90%;
 }
 
 /* Fullscreen adjustments */
 .ytp-fullscreen #ytsub-overlay-container {
-  bottom: 80px;
+  bottom: 76px;
 }
 .ytp-fullscreen.ytp-autohide #ytsub-overlay-container {
-  bottom: 60px;
+  bottom: 48px;
 }

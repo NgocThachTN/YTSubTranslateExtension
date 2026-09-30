@@ -14,9 +14,9 @@ const DEFAULT_SETTINGS = {
   sourceLang: 'auto',
   targetLang: 'vi',
   fontSize: 20,
-  fontColor: '#FFE600', // Yellow for Vietnamese translated subtitle
-  originalColor: '#FFFFFF', // White for original subtitle
-  bgOpacity: 65, // % opacity of background box
+  fontColor: '#FFFFFF', // Clean white matching native YouTube subtitle color
+  originalColor: '#D1D5DB', // Soft light gray/white for original subtitle in bilingual mode
+  bgOpacity: 75, // 75% dark backdrop (YouTube native standard)
   subPosition: 'bottom', // 'bottom' | 'top'
   subBottomOffset: 60, // px from bottom of video player
   hideOriginalNative: true, // Hide YouTube's native subtitle render to avoid overlap
@@ -90,26 +90,41 @@ async function translateWithGoogleCloudApi(text, sourceLang, targetLang, apiKey)
 }
 
 /**
- * Translate text using Google Translate free endpoint (client=gtx)
+ * Translate text using Google Translate free endpoint (with automatic fast failover)
  */
 async function translateWithFreeGoogleEndpoint(text, sourceLang, targetLang) {
   const sl = sourceLang || 'auto';
   const tl = targetLang || 'vi';
-  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(text)}`;
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Google Translate Web API returned status ${response.status}`);
+  // Primary endpoint: gtx
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(text)}`;
+    const response = await fetch(url, { keepalive: true });
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && Array.isArray(data[0])) {
+        const translatedText = data[0]
+          .map((item) => (Array.isArray(item) && item[0] ? item[0] : ''))
+          .join('');
+        return decodeHtmlEntities(translatedText);
+      }
+    }
+  } catch (err) {
+    console.warn('[YT Sub Translate] Primary gtx endpoint failed, trying backup...', err);
   }
 
-  const data = await response.json();
-  if (Array.isArray(data) && Array.isArray(data[0])) {
-    const translatedText = data[0]
-      .map((item) => (Array.isArray(item) && item[0] ? item[0] : ''))
-      .join('');
-    return decodeHtmlEntities(translatedText);
+  // Backup fast endpoint: dict-chrome-ex
+  const backupUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&q=${encodeURIComponent(text)}`;
+  const backupRes = await fetch(backupUrl, { keepalive: true });
+  if (backupRes.ok) {
+    const backupData = await backupRes.json();
+    const result = Array.isArray(backupData) ? backupData[0] : backupData;
+    if (result && typeof result === 'string') {
+      return decodeHtmlEntities(result);
+    }
   }
-  throw new Error('Unexpected translation response format');
+
+  throw new Error('All translation endpoints failed');
 }
 
 /**

@@ -34,16 +34,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Color preset buttons
   const presetButtons = document.querySelectorAll('.preset-btn');
 
-  // Default state
+  // Default state - Clean White YouTube subtitle matching
   let currentSettings = {
     enabled: true,
     displayMode: 'bilingual',
     sourceLang: 'auto',
     targetLang: 'vi',
     fontSize: 20,
-    fontColor: '#FFE600',
-    originalColor: '#FFFFFF',
-    bgOpacity: 65,
+    fontColor: '#FFFFFF',
+    originalColor: '#D1D5DB',
+    bgOpacity: 75,
     subPosition: 'bottom',
     subBottomOffset: 60,
     hideOriginalNative: true,
@@ -73,16 +73,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!previewSubBox) return;
 
     const isBilingual = currentSettings.displayMode === 'bilingual';
+    const bgVal = `rgba(8, 8, 8, ${(currentSettings.bgOpacity ?? 75) / 100})`;
+
+    previewSubBox.style.backgroundColor = bgVal;
     previewSubBox.style.fontSize = `${currentSettings.fontSize}px`;
-    previewSubBox.style.backgroundColor = `rgba(10, 12, 18, ${(currentSettings.bgOpacity ?? 65) / 100})`;
+
+    const previewOrigWrapper = document.getElementById('preview-orig-wrapper');
+    if (previewOrigWrapper) {
+      previewOrigWrapper.style.display = isBilingual ? 'block' : 'none';
+    }
 
     if (previewOrigText) {
-      previewOrigText.style.display = isBilingual ? 'block' : 'none';
+      previewOrigText.style.fontSize = `${Math.round(currentSettings.fontSize * 0.92)}px`;
       previewOrigText.style.color = currentSettings.originalColor || '#FFFFFF';
+      previewOrigText.style.backgroundColor = 'transparent';
     }
 
     if (previewTransText) {
-      previewTransText.style.color = currentSettings.fontColor || '#FFE600';
+      previewTransText.style.fontSize = `${currentSettings.fontSize}px`;
+      previewTransText.style.color = currentSettings.fontColor || '#FFFFFF';
+      previewTransText.style.backgroundColor = 'transparent';
     }
 
     if (origColorContainer) {

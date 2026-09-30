@@ -34,7 +34,6 @@
           <label class="radio-card">
             <input type="radio" name="displayMode" value="bilingual" checked>
             <div class="card-content">
-              <span class="card-icon">🔤</span>
               <span class="card-label">Song ngữ</span>
               <span class="card-desc">Gốc + Tiếng Việt</span>
             </div>
@@ -42,9 +41,8 @@
           <label class="radio-card">
             <input type="radio" name="displayMode" value="vietnamese_only">
             <div class="card-content">
-              <span class="card-icon">🇻🇳</span>
               <span class="card-label">Chỉ Tiếng Việt</span>
-              <span class="card-desc">Bản dịch duy nhất</span>
+              <span class="card-desc">Bản dịch chuẩn</span>
             </div>
           </label>
         </div>
@@ -54,29 +52,29 @@
       <section class="section">
         <div class="grid-2-col">
           <div class="form-group">
-            <label for="select-source-lang" class="form-label">Ngôn ngữ gốc (Nguồn)</label>
+            <label for="select-source-lang" class="form-label">Ngôn ngữ gốc</label>
             <div class="select-wrapper">
               <select id="select-source-lang">
-                <option value="auto">🌐 Tự động nhận diện</option>
-                <option value="en">🇺🇸 Tiếng Anh (English)</option>
-                <option value="ja">🇯🇵 Tiếng Nhật (日本語)</option>
-                <option value="ko">🇰🇷 Tiếng Hàn (한국어)</option>
-                <option value="zh-CN">🇨🇳 Tiếng Trung (Giản thể)</option>
-                <option value="zh-TW">🇹🇼 Tiếng Trung (Phồn thể)</option>
-                <option value="fr">🇫🇷 Tiếng Pháp (Français)</option>
-                <option value="de">🇩🇪 Tiếng Đức (Deutsch)</option>
-                <option value="ru">🇷🇺 Tiếng Nga (Русский)</option>
-                <option value="es">🇪🇸 Tiếng Tây Ban Nha (Español)</option>
-                <option value="th">🇹🇭 Tiếng Thái (ไทย)</option>
+                <option value="auto">Tự động nhận diện</option>
+                <option value="en">Tiếng Anh (English)</option>
+                <option value="ja">Tiếng Nhật (日本語)</option>
+                <option value="ko">Tiếng Hàn (한국어)</option>
+                <option value="zh-CN">Tiếng Trung (Giản thể)</option>
+                <option value="zh-TW">Tiếng Trung (Phồn thể)</option>
+                <option value="fr">Tiếng Pháp (Français)</option>
+                <option value="de">Tiếng Đức (Deutsch)</option>
+                <option value="ru">Tiếng Nga (Русский)</option>
+                <option value="es">Tiếng Tây Ban Nha (Español)</option>
+                <option value="th">Tiếng Thái (ไทย)</option>
               </select>
             </div>
           </div>
           <div class="form-group">
-            <label for="select-target-lang" class="form-label">Dịch sang (Đích)</label>
+            <label for="select-target-lang" class="form-label">Dịch sang</label>
             <div class="select-wrapper">
               <select id="select-target-lang">
-                <option value="vi" selected>🇻🇳 Tiếng Việt</option>
-                <option value="en">🇺🇸 Tiếng Anh</option>
+                <option value="vi" selected>Tiếng Việt</option>
+                <option value="en">Tiếng Anh</option>
               </select>
             </div>
           </div>
@@ -85,12 +83,12 @@
 
       <!-- Subtitle Style Customization -->
       <section class="section">
-        <label class="section-title">Tùy chỉnh giao diện phụ đề</label>
+        <label class="section-title">Giao diện phụ đề</label>
         
         <!-- Font Size Slider -->
         <div class="slider-group">
           <div class="slider-header">
-            <span>Cỡ chữ phụ đề</span>
+            <span>Cỡ chữ</span>
             <span id="font-size-val" class="val-badge">20px</span>
           </div>
           <input type="range" id="slider-font-size" min="14" max="36" step="1" value="20">
@@ -99,10 +97,10 @@
         <!-- Background Opacity Slider -->
         <div class="slider-group">
           <div class="slider-header">
-            <span>Độ mờ nền phụ đề</span>
-            <span id="bg-opacity-val" class="val-badge">65%</span>
+            <span>Độ tối nền viền chữ</span>
+            <span id="bg-opacity-val" class="val-badge">75%</span>
           </div>
-          <input type="range" id="slider-bg-opacity" min="0" max="95" step="5" value="65">
+          <input type="range" id="slider-bg-opacity" min="0" max="95" step="5" value="75">
         </div>
 
         <!-- Subtitle Colors -->
@@ -110,8 +108,8 @@
           <div class="color-item">
             <label class="form-label" for="color-translated">Màu chữ dịch</label>
             <div class="color-input-wrapper">
-              <input type="color" id="color-translated" value="#FFE600">
-              <span id="color-translated-hex" class="hex-text">#FFE600</span>
+              <input type="color" id="color-translated" value="#FFFFFF">
+              <span id="color-translated-hex" class="hex-text">#FFFFFF</span>
             </div>
           </div>
           <div class="color-item" id="orig-color-container">
@@ -125,54 +123,58 @@
 
         <!-- Quick Color Presets -->
         <div class="color-presets">
-          <span class="preset-label">Mẫu màu nhanh:</span>
-          <button type="button" class="preset-btn" data-color="#FFE600" style="background:#FFE600;" title="Vàng Neon"></button>
-          <button type="button" class="preset-btn" data-color="#00E5FF" style="background:#00E5FF;" title="Xanh Cyan"></button>
-          <button type="button" class="preset-btn" data-color="#00FF88" style="background:#00FF88;" title="Xanh Ngọc"></button>
-          <button type="button" class="preset-btn" data-color="#FFFFFF" style="background:#FFFFFF;" title="Trắng Sáng"></button>
-          <button type="button" class="preset-btn" data-color="#FF5252" style="background:#FF5252;" title="Đỏ Cam"></button>
+          <span class="preset-label">Mẫu màu:</span>
+          <button type="button" class="preset-btn" data-color="#FFFFFF" style="background:#FFFFFF;" title="Trắng chuẩn YouTube"></button>
+          <button type="button" class="preset-btn" data-color="#E5E7EB" style="background:#E5E7EB;" title="Xám sáng"></button>
+          <button type="button" class="preset-btn" data-color="#FDE047" style="background:#FDE047;" title="Vàng dịu"></button>
+          <button type="button" class="preset-btn" data-color="#7DD3FC" style="background:#7DD3FC;" title="Xanh lơ"></button>
+          <button type="button" class="preset-btn" data-color="#86EFAC" style="background:#86EFAC;" title="Xanh mint"></button>
         </div>
 
-        <!-- Position & Native Subtitle Options -->
+        <!-- Native Subtitle Options -->
         <div class="checkbox-group">
           <label class="checkbox-label">
             <input type="checkbox" id="check-hide-native" checked>
-            <span>Ẩn phụ đề mặc định của YouTube (tránh bị trùng chữ)</span>
+            <span>Ẩn phụ đề mặc định của YouTube (tránh trùng chữ)</span>
           </label>
         </div>
 
         <div class="button-row">
           <button type="button" id="btn-reset-pos" class="btn btn-secondary">
-            <span>↺</span> Đặt lại vị trí phụ đề
+            Đặt lại vị trí phụ đề
           </button>
         </div>
       </section>
 
       <!-- Subtitle Live Preview Box -->
       <section class="section preview-section">
-        <label class="section-title">Xem trước hiển thị</label>
+        <label class="section-title">Xem trước</label>
         <div class="preview-box-container">
           <div id="preview-sub-box" class="preview-sub-box">
-            <div id="preview-orig-text" class="preview-line-orig">Welcome to this YouTube tutorial.</div>
-            <div id="preview-trans-text" class="preview-line-trans">Chào mừng bạn đến với bài hướng dẫn YouTube này.</div>
+            <div id="preview-orig-wrapper" class="preview-line-wrapper">
+              <span id="preview-orig-text" class="preview-line-orig">それでもいつか きっと会えるだろう</span>
+            </div>
+            <div id="preview-trans-wrapper" class="preview-line-wrapper">
+              <span id="preview-trans-text" class="preview-line-trans">Nhưng tôi chắc chắn chúng ta sẽ gặp lại nhau vào một ngày nào đó.</span>
+            </div>
           </div>
         </div>
       </section>
 
       <!-- Advanced Settings (Collapsible) -->
       <details class="section advanced-details">
-        <summary class="section-title advanced-summary">⚙️ Tùy chọn nâng cao & Google API</summary>
+        <summary class="section-title advanced-summary">Tùy chọn nâng cao & API</summary>
         <div class="advanced-body">
           <p class="advanced-hint">
-            Mặc định tiện ích sử dụng <strong>Google Translate Web API miễn phí</strong> không giới hạn. Nếu muốn dùng Google Cloud Translation API chính thức của bạn, hãy dán API Key vào ô dưới:
+            Mặc định tiện ích sử dụng Google Translate Web API miễn phí không giới hạn. Nếu muốn dùng Google Cloud Translation API chính thức, hãy dán API Key vào ô dưới:
           </p>
           <div class="form-group">
-            <label for="input-api-key" class="form-label">Google Cloud Translation API Key (Tùy chọn)</label>
+            <label for="input-api-key" class="form-label">Google Cloud API Key (Tùy chọn)</label>
             <input type="password" id="input-api-key" placeholder="AIzaSy..." class="text-input">
           </div>
           <div class="cache-controls">
             <button type="button" id="btn-clear-cache" class="btn btn-warning">
-              🗑️ Xóa bộ nhớ đệm dịch
+              Xóa bộ nhớ đệm
             </button>
             <span id="cache-status" class="cache-status-text">Đã lưu đệm</span>
           </div>
@@ -183,11 +185,11 @@
 
     <!-- Footer -->
     <footer class="footer">
-      <span class="footer-tip">💡 <strong>Mẹo:</strong> Bạn có thể dùng chuột kéo thả phụ đề trực tiếp trên video để đổi vị trí!</span>
+      <span class="footer-tip">Mẹo: Có thể kéo thả phụ đề trực tiếp trên video để đổi vị trí.</span>
     </footer>
 
     <!-- Toast Notification -->
-    <div id="toast" class="toast">Đã lưu cài đặt!</div>
+    <div id="toast" class="toast">Đã lưu cài đặt</div>
   </div>
 
   <script src="popup.js"></script>
