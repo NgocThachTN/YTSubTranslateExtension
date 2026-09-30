@@ -157,12 +157,18 @@
   }
 
   /**
-   * Extract accurate Artist and Song title from YouTube DOM & title structure
+   * Extract comprehensive video metadata (Genre, Artist/Guests, Show/Channel, Title)
    */
-  function extractArtistAndSong() {
+  function extractVideoMetadata() {
+    let genre = 'general';
     let artist = '';
     let song = '';
+    let show = '';
+    let guest = '';
     const rawTitle = getVideoTitle();
+    const channel = getChannelName();
+    const titleLower = rawTitle.toLowerCase();
+    const channelLower = channel.toLowerCase();
 
     // 1. Check YouTube official music metadata row in description
     try {
@@ -174,27 +180,65 @@
           const label = titleEl.textContent.trim().toLowerCase();
           if (label.includes('artist') || label.includes('nghệ sĩ') || label.includes('performer')) {
             artist = contentEl.textContent.trim();
+            genre = 'music';
             break;
+          }
+          if (label.includes('song') || label.includes('bài hát') || label.includes('album')) {
+            genre = 'music';
           }
         }
       }
     } catch (_) {}
 
-    // 2. Parse from standard YouTube title format: "Artist - Song" or "Artist – Song"
-    if (!artist && rawTitle) {
-      const clean = rawTitle.replace(/[\(\[\{].*?(official|mv|video|lyrics|audio|visualizer|m\/v).*?[\)\]\}]/gi, '').trim();
-      const match = clean.match(/^([^\-\–\—\|]{2,40})\s*[\-\–\—\|]\s*(.+)$/);
-      if (match) {
-        artist = match[1].trim();
-        song = match[2].trim();
+    // 2. Check for News / Journalism / Reportage
+    const newsBrands = /\b(bbc|cnn|cnbc|bloomberg|reuters|vtv|vtv24|tuổi trẻ|thanh niên|vnexpress|vox|the guardian|abc news|cbs news|fox news|al jazeera|dw|nhk|channel 4 news|sky news|ap archive|france 24|msnbc|pbs news|thời sự)\b/i;
+    const newsKeywords = /\b(news|breaking news|thời sự|bản tin|phóng sự|điều tra|tài liệu|documentary|press conference|họp báo|reportage|investigation|báo cáo|tạp chí kinh tế|tổng thống|thủ tướng|chính phủ)\b/i;
+    
+    if (newsBrands.test(channelLower) || newsKeywords.test(titleLower)) {
+      genre = 'news';
+    }
+
+    // 3. Check for Reality Show / Variety Show / Talk Show / Podcast / Interview
+    const showKeywords = /\b(running man|2 ngày 1 đêm|knowing bros|talkshow|podcast|phỏng vấn|interview|hot ones|the tonight show|late night|graham norton|game show|challenge|weekly idol|amazing saturday|street woman fighter|single's inferno|show me the money|ted talk|vogue 73 questions|vui vẻ|tập\s+\d+|ep\.\s*\d+|episode\s*\d+|show thực tế)\b/i;
+    if (genre !== 'news' && (showKeywords.test(titleLower) || showKeywords.test(channelLower))) {
+      genre = 'reality_show';
+      // Try to parse guest / artist from reality show title
+      const guestMatch = rawTitle.match(/(?:with|khách mời[:\s]|featuring|ft\.?|gặp gỡ|phỏng vấn)\s+([^,\-\|\(\)\[\]]{2,40})/i);
+      if (guestMatch) {
+        guest = guestMatch[1].trim();
+      }
+      const showMatch = rawTitle.match(/^\[([^\]]+)\]|^([^:\|\-]+?)(?:\s*(?:ep\.?\s*\d+|tập\s*\d+|khách mời|with|phỏng vấn))/i);
+      if (showMatch) {
+        show = (showMatch[1] || showMatch[2]).trim();
       }
     }
 
-    // 3. Fallback to channel name
-    if (!artist) {
-      const ch = getChannelName();
-      if (ch) {
-        artist = ch
+    // 4. Check for Music / Songs (if not news/show)
+    const musicKeywords = /\b(mv|official music video|official video|lyric video|lyrics|audio|visualizer|m\/v|cover|remix|ft\.|feat\.|nhạc|bài hát|ca khúc|ost|soundtrack|live session)\b/i;
+    if (genre !== 'news' && genre !== 'reality_show') {
+      if (musicKeywords.test(titleLower) || artist) {
+        genre = 'music';
+      }
+    }
+
+    // Parse Artist - Song format if music
+    if (genre === 'music' || (!artist && !guest)) {
+      const clean = rawTitle.replace(/[\(\[\{].*?(official|mv|video|lyrics|audio|visualizer|m\/v|ep\.\s*\d+|tập\s*\d+).*?[\)\]\}]/gi, '').trim();
+      const match = clean.match(/^([^\-\–\—\|]{2,40})\s*[\-\–\—\|]\s*(.+)$/);
+      if (match) {
+        if (genre === 'music') {
+          if (!artist) artist = match[1].trim();
+          song = match[2].trim();
+        } else if (genre === 'reality_show') {
+          if (!guest) guest = match[2].trim();
+        }
+      }
+    }
+
+    // Fallback artist to channel name if music
+    if (genre === 'music' && !artist) {
+      if (channel) {
+        artist = channel
           .replace(/\s*-\s*Topic$/i, '')
           .replace(/Official(\s*Channel|\s*Artist)?$/i, '')
           .replace(/\s*VEVO$/i, '')
@@ -203,19 +247,27 @@
     }
 
     return {
+      genre,
       artist: artist || '',
-      song: song || rawTitle || '',
+      song: song || '',
+      show: show || '',
+      guest: guest || '',
+      channel: channel || '',
       fullTitle: rawTitle || ''
     };
   }
 
   /**
-   * Extract comprehensive video context (Artist, Song, and Title)
+   * Extract comprehensive video context (Genre, Entities, Artist, Song, and Title)
    */
   function getVideoContext() {
-    const meta = extractArtistAndSong();
+    const meta = extractVideoMetadata();
     const parts = [];
+    if (meta.genre && meta.genre !== 'general') parts.push(`Genre: ${meta.genre}`);
+    if (meta.show) parts.push(`Show: ${meta.show}`);
+    if (meta.channel) parts.push(`Channel: ${meta.channel}`);
     if (meta.artist) parts.push(`Artist: ${meta.artist}`);
+    if (meta.guest) parts.push(`Guest/Figure: ${meta.guest}`);
     if (meta.song && meta.song !== meta.fullTitle) parts.push(`Song: ${meta.song}`);
     if (meta.fullTitle) parts.push(`Title: ${meta.fullTitle}`);
     return parts.join(' | ') || meta.fullTitle || '';

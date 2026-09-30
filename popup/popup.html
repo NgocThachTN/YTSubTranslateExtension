@@ -340,12 +340,13 @@
             <div class="setting-row">
               <div class="row-text-group">
                 <span class="row-label">Phong cách dịch Gemini</span>
-                <span class="row-sublabel">Tự nhận diện thể loại bài hát, tin tức hoặc hội thoại</span>
+                <span class="row-sublabel">Tự nhận diện bài hát, show thực tế, báo chí hoặc hội thoại</span>
               </div>
               <select id="select-gemini-style" class="custom-select">
-                <option value="auto" selected>Tự động nhận diện (Lyrics / Báo chí / Đời thường)</option>
-                <option value="lyrics">Chuyên lời bài hát (Giàu cảm xúc, vần điệu, giữ nốt nhạc ♪)</option>
-                <option value="news">Báo chí & Tài liệu (Trang trọng, khách quan, chuẩn mực)</option>
+                <option value="auto" selected>Tự động nhận diện (Lyrics / Show thực tế / Báo chí / Đời thường)</option>
+                <option value="lyrics">Lời bài hát & Âm nhạc (Thơ ca, giàu cảm xúc, giữ nốt nhạc ♪)</option>
+                <option value="reality">Chương trình thực tế & Phỏng vấn (Show, Talkshow, Podcast)</option>
+                <option value="news">Báo chí & Tài liệu (Trang trọng, khách quan, danh xưng chuẩn mực)</option>
                 <option value="casual">Hội thoại đời thường & Vlog (Tự nhiên, dí dỏm, xưng hô linh hoạt)</option>
               </select>
             </div>
@@ -353,14 +354,15 @@
             <!-- Row: Vai vế xưng hô Gemini -->
             <div class="setting-row">
               <div class="row-text-group">
-                <span class="row-label">Vai vế xưng hô (Lyrics / Hội thoại)</span>
-                <span class="row-sublabel">Sửa lỗi nhầm "Anh - Em" khi ca sĩ nam hoặc nữ hát</span>
+                <span class="row-label">Vai vế xưng hô (Lyrics / Show / Báo)</span>
+                <span class="row-sublabel">Tự tìm nghệ sĩ/MC/khách mời để xưng hô chuẩn xác</span>
               </div>
               <select id="select-gemini-pronoun" class="custom-select">
-                <option value="auto" selected>Tự động theo ca sĩ (Khuyên dùng)</option>
-                <option value="female">Nữ hát / Phụ nữ nói (Xưng Em - Gọi Anh)</option>
-                <option value="male">Nam hát / Đàn ông nói (Xưng Anh - Gọi Em)</option>
-                <option value="neutral">Trữ tình trung tính (Tôi - Bạn / Ta - Người)</option>
+                <option value="auto" selected>Tự động theo Thể loại & Nghệ sĩ (Khuyên dùng)</option>
+                <option value="female">Nữ hát / Khách mời nữ (Lyrics: Em-Anh | Show: Nữ xưng hô)</option>
+                <option value="male">Nam hát / Khách mời nam (Lyrics: Anh-Em | Show: Nam xưng hô)</option>
+                <option value="show_host">Người dẫn chương trình / MC (Tôi - Quý vị / Các bạn)</option>
+                <option value="neutral">Trang trọng / Khách quan (Tôi - Bạn / Chúng tôi)</option>
               </select>
             </div>
 

@@ -207,24 +207,94 @@ function resolveGeminiModel(model) {
 /**
  * Extract artist name if explicitly tagged in videoContext
  */
-function extractArtistName(videoContext = '') {
-  const match = (videoContext || '').match(/Artist:\s*([^\|]+)/i);
-  if (match) return match[1].trim();
-  return '';
+/**
+ * Parse structured video context
+ */
+function parseVideoContext(videoContext = '') {
+  const result = {
+    genre: '',
+    artist: '',
+    guest: '',
+    show: '',
+    channel: '',
+    title: videoContext
+  };
+
+  const genreMatch = videoContext.match(/Genre:\s*([^\|]+)/i);
+  if (genreMatch) result.genre = genreMatch[1].trim().toLowerCase();
+
+  const artistMatch = videoContext.match(/Artist:\s*([^\|]+)/i);
+  if (artistMatch) result.artist = artistMatch[1].trim();
+
+  const guestMatch = videoContext.match(/Guest\/Figure:\s*([^\|]+)/i);
+  if (guestMatch) result.guest = guestMatch[1].trim();
+
+  const showMatch = videoContext.match(/Show:\s*([^\|]+)/i);
+  if (showMatch) result.show = showMatch[1].trim();
+
+  const channelMatch = videoContext.match(/Channel:\s*([^\|]+)/i);
+  if (channelMatch) result.channel = channelMatch[1].trim();
+
+  const titleMatch = videoContext.match(/Title:\s*([^\|]+)/i);
+  if (titleMatch) result.title = titleMatch[1].trim();
+
+  return result;
 }
 
 /**
- * Detect artist gender from video title, channel name, or metadata
+ * Determine effective video genre (lyrics | reality_show | news | casual)
  */
-function detectArtistGender(videoContext = '') {
+function resolveEffectiveGenre(requestedStyle = 'auto', videoContext = '') {
+  if (requestedStyle && requestedStyle !== 'auto') {
+    if (requestedStyle === 'lyrics') return 'lyrics';
+    if (requestedStyle === 'reality') return 'reality_show';
+    if (requestedStyle === 'news') return 'news';
+    if (requestedStyle === 'casual') return 'casual';
+  }
+
+  const meta = parseVideoContext(videoContext);
+  if (meta.genre) {
+    if (meta.genre === 'music') return 'lyrics';
+    if (meta.genre === 'reality_show') return 'reality_show';
+    if (meta.genre === 'news') return 'news';
+  }
+
+  const lower = (videoContext || '').toLowerCase();
+  if (/\b(bbc|cnn|vtv|cnbc|bloomberg|reuters|news|thời sự|bản tin|phóng sự|documentary|điều tra)\b/i.test(lower)) {
+    return 'news';
+  }
+  if (/\b(running man|knowing bros|2 ngày 1 đêm|talkshow|podcast|phỏng vấn|interview|hot ones|the tonight show|game show|weekly idol|ep\.\s*\d+|tập\s*\d+|show thực tế)\b/i.test(lower)) {
+    return 'reality_show';
+  }
+  if (/\b(mv|official music video|lyrics|audio|song|ca khúc|bài hát|album|♪|♫)\b/i.test(lower)) {
+    return 'lyrics';
+  }
+
+  return 'casual';
+}
+
+/**
+ * Extract primary artist, guest or figure name from videoContext
+ */
+function extractPrimaryFigure(videoContext = '') {
+  const meta = parseVideoContext(videoContext);
+  return meta.artist || meta.guest || meta.show || meta.channel || '';
+}
+
+/**
+ * Detect figure gender from video title, channel name, or metadata
+ */
+function detectFigureGender(videoContext = '') {
   const text = (videoContext || '').toLowerCase();
   const femalePatterns = [
     /\b(laufey|aimer|yoasobi|zutomayo|yorushika|milet|claris|chappell roan|gracie abrams|sabrina carpenter|olivia dean|beabadoobee|billie eilish|olivia rodrigo|taylor swift|adele|ariana grande|dua lipa|katy perry|rihanna|lady gaga|beyonc[eé]|selena gomez|mariah carey|whitney houston|celine dion|avril lavigne|camila cabello|shakira|sia|lana del rey|halsey|miley cyrus|demi lovato|iu|taeyeon|ros[eé]|jennie|jisoo|lisa|blackpink|twice|aespa|ive|newjeans|le sserafim|red velvet|itzy|gidle|\(g\)i-dle|illit|carly rae jepsen|bebe rexha|ellie goulding|kesha|alessia cara|lorde|anne-marie|madonna|britney spears)\b/i,
+    /\b(ellen|oprah|drew barrymore|kelly clarkson|song ji hyo|jeon so min|thúy ngân|lan ngọc|ninh dương lan ngọc|hari won|lâm vỹ dạ|sam|khả như)\b/i,
     /\b(vũ cát tường|hoàng thùy linh|min|amee|bích phương|văn mai hương|hiền hồ|tóc tiên|bảo anh|đông nhi|mỹ tâm|hồ ngọc hà|khởi my|phương ly|lyly|tlinh|orange|suni hạ linh|vũ phụng tiên|nguyên hà)\b/i
   ];
   const malePatterns = [
     /\b(keshi|joji|fujii kaze|eve|kenshi yonezu|official hige dandism|king gnu|stephen sanchez|conan gray|jeremy zucker|alec benjamin|ed sheeran|charlie puth|bruno mars|justin bieber|the weeknd|post malone|drake|shawn mendes|sam smith|harry styles|zayn|eminem|maroon 5|coldplay|bts|jungkook|jimin|suga|exo|stray kids|seventeen|bigbang|g-dragon)\b/i,
-    /\b(sơn tùng|soobin|jack|k-icm|erik|đức phúc|noo phước thịnh|hà anh tuấn|vũ\.|hoàng dũng|quân a\.p|trịnh thăng bình|phan mạnh quỳnh|trung quân|bùi anh tuấn|đan trường|tuấn hưng|justatee|rhymastic|đen vâu|đen|b ray|hieuthuhai|wren evans|mono|grey d|tăng duy tân|lê bảo bình|khắc việt)\b/i
+    /\b(jimmy fallon|jimmy kimmel|stephen colbert|james corden|graham norton|joe rogan|conan o'brien|seth meyers|gordon ramsay|yoo jae suk|kang ho dong|shin dong yup|kim jong kook|haha|lee kwang soo|ji suk jin|yang se chan|lee soo geun|seo jang hoon|kim hee chul|min kyung hoon)\b/i,
+    /\b(trấn thành|trường giang|đại nghĩa|ngô kiến huy|jun phạm|lê dương bảo lâm|hieuthuhai|cris phan|sơn tùng|soobin|jack|k-icm|erik|đức phúc|noo phước thịnh|hà anh tuấn|vũ\.|hoàng dũng|quân a\.p|trịnh thăng bình|phan mạnh quỳnh|trung quân|bùi anh tuấn|đan trường|tuấn hưng|justatee|rhymastic|đen vâu|đen|b ray|wren evans|mono|grey d|tăng duy tân|lê bảo bình|khắc việt)\b/i
   ];
 
   for (const p of femalePatterns) {
@@ -236,18 +306,18 @@ function detectArtistGender(videoContext = '') {
   return '';
 }
 
-// Session-level anchor map to guarantee 100% consistent pronoun perspective across all song lines
+// Session-level anchor map to guarantee 100% consistent perspective across all video lines
 const videoRoleAnchor = new Map();
 const MAX_ANCHOR_CACHE = 1000;
 
 function getVideoAnchorKey(videoContext = '') {
   if (!videoContext) return 'default';
-  const match = videoContext.match(/Title:\s*([^\|]+)/i) || videoContext.match(/Artist:\s*([^\|]+)/i);
+  const match = videoContext.match(/Title:\s*([^\|]+)/i) || videoContext.match(/Artist:\s*([^\|]+)/i) || videoContext.match(/Show:\s*([^\|]+)/i);
   if (match) return match[1].trim().toLowerCase();
   return videoContext.slice(0, 80).toLowerCase().trim();
 }
 
-function resolveSongPronounRole(requestedRole, videoTitle) {
+function resolveSongPronounRole(requestedRole, videoTitle, effectiveGenre = 'lyrics') {
   if (requestedRole && requestedRole !== 'auto') {
     return requestedRole;
   }
@@ -257,7 +327,7 @@ function resolveSongPronounRole(requestedRole, videoTitle) {
     return videoRoleAnchor.get(key);
   }
 
-  const detected = detectArtistGender(videoTitle);
+  const detected = detectFigureGender(videoTitle);
   if (detected) {
     if (videoRoleAnchor.size >= MAX_ANCHOR_CACHE) {
       videoRoleAnchor.delete(videoRoleAnchor.keys().next().value);
@@ -283,45 +353,98 @@ function anchorRoleFromTranslation(videoTitle, translatedText) {
 }
 
 /**
- * Sanitize and enforce lyric pronoun consistency on translated Vietnamese output
+ * Sanitize and enforce genre-specific pronoun consistency on translated Vietnamese output
  */
-function cleanLyricsPronouns(text, role) {
+function cleanOutputByGenre(text, effectiveGenre, role) {
   if (!text || typeof text !== 'string') return text;
   let cleaned = text;
 
-  if (role === 'female') {
+  if (effectiveGenre === 'lyrics') {
+    if (role === 'female') {
+      cleaned = cleaned
+        .replace(/\bTôi\b/g, 'Em')
+        .replace(/\btôi\b/g, 'em')
+        .replace(/\bchính mình\b/gi, 'chính em')
+        .replace(/\bbản thân mình\b/gi, 'bản thân em')
+        .replace(/\bcủa mình\b/gi, 'của em')
+        .replace(/\bvới mình\b/gi, 'với em')
+        .replace(/\bcho mình\b/gi, 'cho em')
+        .replace(/^(Anh|anh) (nghĩ|thấy|nhớ|muốn|biết|yêu|cần|đang|đã|sẽ|chẳng|không|bước|khóc|mơ|đợi|chờ|lạc lối|cô đơn)\b/g, (m, p1, p2) => {
+          return (p1 === 'Anh' ? 'Em' : 'em') + ' ' + p2;
+        });
+    } else if (role === 'male') {
+      cleaned = cleaned
+        .replace(/\bTôi\b/g, 'Anh')
+        .replace(/\btôi\b/g, 'anh')
+        .replace(/\bchính mình\b/gi, 'chính anh')
+        .replace(/\bbản thân mình\b/gi, 'bản thân anh')
+        .replace(/\bcủa mình\b/gi, 'của anh')
+        .replace(/\bvới mình\b/gi, 'với anh')
+        .replace(/\bcho mình\b/gi, 'cho anh')
+        .replace(/^(Em|em) (nghĩ|thấy|nhớ|muốn|biết|yêu|cần|đang|đã|sẽ|chẳng|không|bước|khóc|mơ|đợi|chờ|lạc lối|cô đơn)\b/g, (m, p1, p2) => {
+          return (p1 === 'Em' ? 'Anh' : 'anh') + ' ' + p2;
+        });
+    }
+  } else if (effectiveGenre === 'reality_show') {
+    // In reality shows, avoid inappropriate romantic couple address (anh yêu / em yêu)
     cleaned = cleaned
-      .replace(/\bTôi\b/g, 'Em')
-      .replace(/\btôi\b/g, 'em')
-      .replace(/\bchính mình\b/gi, 'chính em')
-      .replace(/\bbản thân mình\b/gi, 'bản thân em')
-      .replace(/\bcủa mình\b/gi, 'của em')
-      .replace(/\bvới mình\b/gi, 'với em')
-      .replace(/\bcho mình\b/gi, 'cho em')
-      .replace(/^(Anh|anh) (nghĩ|thấy|nhớ|muốn|biết|yêu|cần|đang|đã|sẽ|chẳng|không|bước|khóc|mơ|đợi|chờ|lạc lối|cô đơn)\b/g, (m, p1, p2) => {
-        return (p1 === 'Anh' ? 'Em' : 'em') + ' ' + p2;
-      });
-  } else if (role === 'male') {
+      .replace(/\banh yêu\b/gi, 'anh')
+      .replace(/\bem yêu\b/gi, 'em')
+      .replace(/\bcục cưng\b/gi, 'bạn');
+  } else if (effectiveGenre === 'news') {
+    // In news & reports, eliminate romantic & casual pronouns
     cleaned = cleaned
-      .replace(/\bTôi\b/g, 'Anh')
-      .replace(/\btôi\b/g, 'anh')
-      .replace(/\bchính mình\b/gi, 'chính anh')
-      .replace(/\bbản thân mình\b/gi, 'bản thân anh')
-      .replace(/\bcủa mình\b/gi, 'của anh')
-      .replace(/\bvới mình\b/gi, 'với anh')
-      .replace(/\bcho mình\b/gi, 'cho anh')
-      .replace(/^(Em|em) (nghĩ|thấy|nhớ|muốn|biết|yêu|cần|đang|đã|sẽ|chẳng|không|bước|khóc|mơ|đợi|chờ|lạc lối|cô đơn)\b/g, (m, p1, p2) => {
-        return (p1 === 'Em' ? 'Anh' : 'anh') + ' ' + p2;
-      });
+      .replace(/\banh yêu\b/gi, 'nam ca sĩ')
+      .replace(/\bem yêu\b/gi, 'nữ ca sĩ')
+      .replace(/\bmình ơi\b/gi, '');
   }
 
   return cleaned;
 }
 
 /**
- * Build directive for Vietnamese pronoun roles with 100% song-wide consistency (triệt tiêu nhảy ngôi tôi/mình/em/anh)
+ * Build directive for Vietnamese pronoun roles adaptive to Genre (Music, Reality Shows, News)
  */
-function getPronounInstruction(effectiveRole = 'auto', videoTitle = '') {
+function getPronounInstruction(effectiveRole = 'auto', videoTitle = '', effectiveGenre = 'lyrics') {
+  const primaryFigure = extractPrimaryFigure(videoTitle);
+  const figureHint = primaryFigure ? ` Identified figure/artist: "${primaryFigure}".` : '';
+
+  // 1. REALITY SHOW / TALKSHOW / PODCAST / INTERVIEW DIRECTIVE
+  if (effectiveGenre === 'reality_show') {
+    let roleSpecific = '';
+    if (effectiveRole === 'show_host') {
+      roleSpecific = `\n- SPEAKER IS MC/HOST: When addressing the audience, use "chúng tôi", "quý vị và các bạn", "mọi người". When talking with guests, address them as "bạn", "anh", "chị", "em".`;
+    } else if (effectiveRole === 'female') {
+      roleSpecific = `\n- SPEAKER IS FEMALE: Address herself naturally as "em" (when talking to seniors/hosts) or "mình/tôi" (sharing views). Address others as "anh", "chị", "bạn".`;
+    } else if (effectiveRole === 'male') {
+      roleSpecific = `\n- SPEAKER IS MALE: Address himself naturally as "anh" (to juniors) or "em" (to seniors) or "tôi/mình". Address others respectfully.`;
+    }
+
+    return `\nCRITICAL PRONOUN DIRECTIVE - REALITY SHOW / TALKSHOW / INTERVIEW (SHOW THỰC TẾ & PHỎNG VẤN):${figureHint}
+- CONTEXT: This is a reality show, variety show, podcast, or interview. People are talking and interacting dynamically in real life.
+- PRONOUN USAGE (XƯNG HÔ ĐÚNG CHUẨN ĐỜI SỐNG THỰC TẾ):
+  * Host with audience: "chúng tôi", "quý vị và các bạn", "mọi người".
+  * Participants with each other: Use natural Vietnamese conversational address ("anh / em", "chị / em", "tôi / bạn", "mình / cậu", "mọi người").
+  * STRICT PROHIBITION: NEVER use romantic couple pronouns ("anh yêu / em yêu") unless this is explicitly a romantic dating show! This is an entertainment show/interview, NOT a love song.
+  * DO NOT use stiff robotic pronouns ("tôi nghĩ bạn nên..."). Translate naturally ("mình nghĩ cậu nên...", "anh thấy em nên...").
+  * Translate natural exclamations lively: "Trời ơi!", "Thật không?", "Cười xỉu", "Tuyệt vời!".${roleSpecific}`;
+  }
+
+  // 2. NEWS & JOURNALISM DIRECTIVE
+  if (effectiveGenre === 'news') {
+    return `\nCRITICAL PRONOUN DIRECTIVE - NEWS & JOURNALISM (BÁO CHÍ, THỜI SỰ & PHÓNG SỰ):${figureHint}
+- CONTEXT: Formal news report, documentary, or journalistic article.
+- PRONOUN USAGE (DANH XƯNG BÁO CHÍ CHUẨN MỰC):
+  * News Anchor / Reporter: Use editorial "chúng tôi", "phóng viên", or neutral 3rd-person narration.
+  * Public figures & Artists mentioned: MUST be addressed with proper respectful titles:
+    - Female artist/singer: "nữ ca sĩ [Tên]", "nữ nghệ sĩ [Tên]", "cô [Tên]"
+    - Male artist/singer: "nam ca sĩ [Tên]", "nam diễn viên [Tên]", "anh [Tên]"
+    - Experts/Leaders: "ông/bà [Tên]", "vị chuyên gia", "nhà khoa học"
+  * STRICT PROHIBITION: NEVER use casual or romantic pronouns ("anh yêu", "em yêu", "cậu ấy", "mình"). Maintain journalistic objectivity and professional distance.
+  * Terminology: Use standard, concise journalistic Vietnamese.`;
+  }
+
+  // 3. SONG LYRICS DIRECTIVE
   if (effectiveRole === 'female') {
     return `\nCRITICAL PRONOUN DIRECTIVE - FEMALE SINGER (ĐỒNG NHẤT 100% NGÔI XƯNG NỮ HÁT):
 - The singer is FEMALE. You MUST maintain an absolute, 100% consistent "Em - Anh" lyrical voice across EVERY SINGLE LINE of the song.
@@ -352,7 +475,7 @@ function getPronounInstruction(effectiveRole = 'auto', videoTitle = '') {
   }
 
   // Default: 'auto' with dynamic artist identification
-  const parsedArtist = extractArtistName(videoTitle);
+  const parsedArtist = primaryFigure;
   const artistLookupHint = parsedArtist ? `
 - ARTIST IDENTITY LOOKUP: The singer is identified as "${parsedArtist}". Look up your pre-trained knowledge base to identify whether "${parsedArtist}" is female, male, or a band.` : '';
 
@@ -365,29 +488,27 @@ function getPronounInstruction(effectiveRole = 'auto', videoTitle = '') {
 }
 
 /**
- * Construct adaptive prompt based on video genre, title, and lyrics detection
+ * Construct adaptive prompt based on video genre, title, entities and lyrics detection
  */
 function buildGeminiSubtitlePrompt(text, targetName, videoTitle = '', style = 'auto', pronounRole = 'auto') {
-  const contextLine = videoTitle ? `Video Context / Title: "${videoTitle.slice(0, 180)}"\n` : '';
+  const contextLine = videoTitle ? `Video Context / Metadata: "${videoTitle.slice(0, 240)}"\n` : '';
+  const effectiveGenre = resolveEffectiveGenre(style, videoTitle);
   let styleInstruction = '';
 
-  if (style === 'lyrics') {
+  if (effectiveGenre === 'lyrics') {
     styleInstruction = `MODE: SONG LYRICS. Translate poetically, emotionally, and rhythmically like a top Vietnamese lyricist (phổ lời Việt êm dịu, giàu chất thơ và nhạc tính, tránh dịch máy móc cứng nhắc). Preserve musical notes (♪, ♫) if present.`;
-  } else if (style === 'news') {
-    styleInstruction = `MODE: NEWS & ARTICLES. Use formal, professional, objective, journalistic Vietnamese with accurate terminology.`;
-  } else if (style === 'casual') {
-    styleInstruction = `MODE: CASUAL CONVERSATION & VLOGS. Use natural, lively, colloquial Vietnamese dialogue.`;
+  } else if (effectiveGenre === 'reality_show') {
+    styleInstruction = `MODE: REALITY SHOW & TALK SHOW. Translate lively, authentic, witty, and conversational Vietnamese for reality/game show dialogue.`;
+  } else if (effectiveGenre === 'news') {
+    styleInstruction = `MODE: NEWS & ARTICLES. Use formal, professional, objective, journalistic Vietnamese with accurate terminology and proper respectful titles.`;
   } else {
-    styleInstruction = `MODE: AUTO-ADAPTIVE GENRE DETECTION.
-- If this is a SONG or MUSIC VIDEO (title indicates song/MV/singer, or text contains ♪/♫ or poetic verses): Translate poetically, emotionally, and rhythmically like a song lyricist (lời ca mượt mà, sâu lắng, giàu vần điệu). Preserve musical notes (♪, ♫) if present.
-- If NEWS, ARTICLE, REPORT, or DOCUMENTARY: Use crisp, formal, journalistic, informative Vietnamese.
-- If VLOG, PODCAST, GAMING, or CASUAL DIALOGUE: Use authentic, natural, colloquial Vietnamese.`;
+    styleInstruction = `MODE: CASUAL CONVERSATION & VLOGS. Use natural, lively, colloquial Vietnamese dialogue.`;
   }
 
-  const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle);
-  const pronounInstruction = targetName === 'Vietnamese' ? getPronounInstruction(effectiveRole, videoTitle) : '';
+  const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
+  const pronounInstruction = targetName === 'Vietnamese' ? getPronounInstruction(effectiveRole, videoTitle, effectiveGenre) : '';
 
-  return `You are a world-class bilingual subtitle translator and lyrical adapter adapting style to video content:
+  return `You are a world-class bilingual subtitle translator and localization expert adapting style to video genre:
 ${contextLine}${styleInstruction}${pronounInstruction}
 
 Translate directly into natural, concise ${targetName} suitable for video subtitles. Output ONLY the translated text, no quotes, no explanations:
@@ -395,25 +516,23 @@ ${text}`;
 }
 
 function buildGeminiBatchSubtitlePrompt(lines, targetName, videoTitle = '', style = 'auto', pronounRole = 'auto') {
-  const contextLine = videoTitle ? `Video Context / Title: "${videoTitle.slice(0, 180)}"\n` : '';
+  const contextLine = videoTitle ? `Video Context / Metadata: "${videoTitle.slice(0, 240)}"\n` : '';
+  const effectiveGenre = resolveEffectiveGenre(style, videoTitle);
   const promptLines = lines.map((text, idx) => `${idx + 1}. ${text}`).join('\n');
   let styleInstruction = '';
 
-  if (style === 'lyrics') {
+  if (effectiveGenre === 'lyrics') {
     styleInstruction = `MODE: SONG LYRICS. Translate these continuous lines as song lyrics with poetic cadence, melodic flow, and deep emotion across lines (phổ lời Việt êm ái, giàu cảm xúc, uyển chuyển). Preserve musical notes (♪, ♫) if present.`;
-  } else if (style === 'news') {
-    styleInstruction = `MODE: NEWS & ARTICLES. Use formal, professional, objective, journalistic Vietnamese with accurate terminology.`;
-  } else if (style === 'casual') {
-    styleInstruction = `MODE: CASUAL & VLOGS. Use lively, natural, colloquial Vietnamese dialogue.`;
+  } else if (effectiveGenre === 'reality_show') {
+    styleInstruction = `MODE: REALITY SHOW & TALK SHOW. Translate these continuous dialogue lines as authentic, witty, lively conversation for variety/reality show.`;
+  } else if (effectiveGenre === 'news') {
+    styleInstruction = `MODE: NEWS & ARTICLES. Use formal, professional, objective, journalistic Vietnamese with accurate terminology and proper public figure titles.`;
   } else {
-    styleInstruction = `MODE: AUTO-ADAPTIVE GENRE DETECTION.
-- If this is a SONG or MUSIC VIDEO (title indicates music/song, or lines have ♪/♫ or lyric rhymes): Translate as lyrics with poetic rhythm, musical cadence, and deep emotion across lines (lời ca giàu vần điệu, cảm xúc). Preserve musical notes (♪, ♫).
-- If NEWS, ARTICLE, REPORT, or DOCUMENTARY: Use crisp, formal, journalistic, informative Vietnamese.
-- If VLOG, GAMING, or CASUAL DIALOGUE: Use authentic, natural, colloquial Vietnamese.`;
+    styleInstruction = `MODE: CASUAL & VLOGS. Use lively, natural, colloquial Vietnamese dialogue.`;
   }
 
-  const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle);
-  const pronounInstruction = targetName === 'Vietnamese' ? getPronounInstruction(effectiveRole, videoTitle) : '';
+  const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
+  const pronounInstruction = targetName === 'Vietnamese' ? getPronounInstruction(effectiveRole, videoTitle, effectiveGenre) : '';
 
   return `You are a world-class bilingual subtitle translator translating continuous video subtitles:
 ${contextLine}${styleInstruction}${pronounInstruction}
@@ -432,7 +551,8 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
   const tl = targetLang || 'vi';
   const targetName = tl === 'vi' ? 'Vietnamese' : tl;
   const chosenModel = resolveGeminiModel(model);
-  const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle);
+  const effectiveGenre = resolveEffectiveGenre(style, videoTitle);
+  const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
 
   const prompt = buildGeminiSubtitlePrompt(text, targetName, videoTitle, style, effectiveRole);
 
@@ -444,7 +564,7 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.35,
+          temperature: effectiveGenre === 'news' ? 0.15 : 0.35,
           maxOutputTokens: 120
         }
       }),
@@ -485,8 +605,10 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
       .replace(/^(Bản dịch|Translation):\s*/i, '')
       .trim();
     if (cleaned) {
-      cleaned = cleanLyricsPronouns(decodeHtmlEntities(cleaned), effectiveRole);
-      anchorRoleFromTranslation(videoTitle, cleaned);
+      cleaned = cleanOutputByGenre(decodeHtmlEntities(cleaned), effectiveGenre, effectiveRole);
+      if (effectiveGenre === 'lyrics') {
+        anchorRoleFromTranslation(videoTitle, cleaned);
+      }
       return cleaned;
     }
   }
@@ -504,7 +626,8 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
   const tl = targetLang || 'vi';
   const targetName = tl === 'vi' ? 'Vietnamese' : tl;
   const chosenModel = resolveGeminiModel(model);
-  const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle);
+  const effectiveGenre = resolveEffectiveGenre(style, videoTitle);
+  const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
 
   const prompt = buildGeminiBatchSubtitlePrompt(lines, targetName, videoTitle, style, effectiveRole);
 
@@ -516,7 +639,7 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.35,
+          temperature: effectiveGenre === 'news' ? 0.15 : 0.35,
           maxOutputTokens: 1400
         }
       }),
@@ -548,7 +671,7 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
     if (match) {
       const idx = parseInt(match[1], 10) - 1;
       if (idx >= 0 && idx < lines.length) {
-        results[idx] = cleanLyricsPronouns(decodeHtmlEntities(match[2].trim()), effectiveRole);
+        results[idx] = cleanOutputByGenre(decodeHtmlEntities(match[2].trim()), effectiveGenre, effectiveRole);
       }
     }
   }
@@ -560,12 +683,12 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
       .filter(Boolean);
     if (cleanLines.length === lines.length) {
       for (let i = 0; i < lines.length; i++) {
-        results[i] = cleanLyricsPronouns(decodeHtmlEntities(cleanLines[i]), effectiveRole);
+        results[i] = cleanOutputByGenre(decodeHtmlEntities(cleanLines[i]), effectiveGenre, effectiveRole);
       }
     }
   }
 
-  if (results.some(Boolean)) {
+  if (effectiveGenre === 'lyrics' && results.some(Boolean)) {
     anchorRoleFromTranslation(videoTitle, results.join(' '));
   }
 
@@ -581,7 +704,8 @@ async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi',
     return { success: true, translation: '' };
   }
 
-  const cacheKey = `${service}:${style || 'auto'}:${pronounRole || 'auto'}:${sourceLang}->${targetLang}:${apiKey ? 'custom' : 'free'}:${trimmed}`;
+  const anchorKey = service === 'gemini' ? `:${getVideoAnchorKey(videoTitle)}` : '';
+  const cacheKey = `${service}:${style || 'auto'}:${pronounRole || 'auto'}${anchorKey}:${sourceLang}->${targetLang}:${apiKey ? 'custom' : 'free'}:${trimmed}`;
 
   // Check in-memory cache
   if (translationCache.has(cacheKey)) {
