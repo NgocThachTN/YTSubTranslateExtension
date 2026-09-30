@@ -366,13 +366,64 @@
               </select>
             </div>
 
-            <!-- Row: Google Cloud API Key -->
-            <div class="setting-row-vertical">
-              <div class="row-header-inline">
-                <span class="row-label">Google Cloud API Key (Tùy chọn)</span>
-                <span class="row-sublabel">Để trống để sử dụng API miễn phí</span>
+            <!-- Bảng kiểm tra Quota & Hiệu năng Gemini AI -->
+            <div class="quota-monitor-card">
+              <div class="quota-header">
+                <div class="quota-title-group">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/>
+                  </svg>
+                  <span class="quota-title">Bảng theo dõi Quota Gemini AI</span>
+                </div>
+                <a href="https://aistudio.google.com/app/plan_information" target="_blank" class="link-subtle" title="Mở trang kiểm tra Quota & Báo cáo chính thức của Google AI Studio">Google Quota ↗</a>
               </div>
-              <input type="password" id="input-api-key" placeholder="AIzaSy..." class="custom-input">
+
+              <!-- Trạng thái Quota -->
+              <div id="quota-status-banner" class="quota-badge-status ready">
+                <span class="quota-dot"></span>
+                <span id="quota-status-text">Định mức Gemini Free: 15 RPM • 1,500 RPD</span>
+              </div>
+
+              <!-- Lưới thống kê sử dụng -->
+              <div class="quota-grid">
+                <div class="quota-stat-item">
+                  <span class="quota-stat-num" id="stat-requests-today">0 / 1,500</span>
+                  <span class="quota-stat-label">Yêu cầu hôm nay (RPD)</span>
+                </div>
+                <div class="quota-stat-item">
+                  <span class="quota-stat-num text-accent" id="stat-cues-translated">0</span>
+                  <span class="quota-stat-label">Câu đã dịch AI</span>
+                </div>
+                <div class="quota-stat-item">
+                  <span class="quota-stat-num text-success" id="stat-quota-saved">0</span>
+                  <span class="quota-stat-label">Tiết kiệm (Lọc âm & Cache)</span>
+                </div>
+                <div class="quota-stat-item">
+                  <span class="quota-stat-num" id="stat-pacing-speed">≤ 15 RPM</span>
+                  <span class="quota-stat-label">Điều tốc an toàn</span>
+                </div>
+              </div>
+
+              <!-- Thanh tiến độ Quota ngày -->
+              <div class="quota-progress-wrap">
+                <div class="quota-progress-bar">
+                  <div id="quota-progress-fill" class="quota-progress-fill" style="width: 0%;"></div>
+                </div>
+                <div class="quota-progress-labels">
+                  <span id="quota-usage-percent">0% Quota ngày đã dùng</span>
+                  <span id="quota-key-pool">1 API Key</span>
+                </div>
+              </div>
+
+              <!-- Nút kiểm tra trạng thái Quota trực tiếp -->
+              <div class="quota-actions">
+                <button type="button" id="btn-check-quota" class="btn-subtle btn-block">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="margin-right: 5px;">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                  </svg>
+                  Kiểm tra tình trạng Quota & API Key
+                </button>
+              </div>
             </div>
 
             <!-- Inset Stats Box -->

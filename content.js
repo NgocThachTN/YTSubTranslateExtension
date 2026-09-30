@@ -134,7 +134,118 @@
     }
     return 'en';
   }
+  /**
+   * Comprehensive multilingual dictionary for sound, action, and music cues
+   * (Japanese, Chinese, Korean, English) -> Vietnamese
+   */
+  const SOUND_CUE_MAP = {
+    // Clapping / Applause
+    '拍手': 'Vỗ tay',
+    'applause': 'Tiếng vỗ tay',
+    'clapping': 'Tiếng vỗ tay',
+    'clap': 'Vỗ tay',
+    'cheering': 'Tiếng reo hò',
+    'cheers': 'Tiếng reo hò',
+    'cheer': 'Tiếng reo hò',
+    '歓声': 'Tiếng reo hò',
+    '박수': 'Tiếng vỗ tay',
+    '환호': 'Tiếng reo hò',
 
+    // Laughing / Laughter
+    '笑': 'Cười',
+    '笑い': 'Tiếng cười',
+    'laughter': 'Tiếng cười',
+    'laughing': 'Tiếng cười',
+    'laughs': 'Cười',
+    'laugh': 'Cười',
+    'giggle': 'Cười khúc khích',
+    'giggling': 'Cười khúc khích',
+    'chuckle': 'Cười thầm',
+    'chuckling': 'Cười thầm',
+    '웃음': 'Tiếng cười',
+
+    // Sighing / Gasping
+    'ため息': 'Thở dài',
+    'sigh': 'Thở dài',
+    'sighs': 'Thở dài',
+    'sighing': 'Thở dài',
+    'gasp': 'Kinh ngạc',
+    'gasps': 'Kinh ngạc',
+    'gasping': 'Kinh ngạc',
+    '息をのむ': 'Nín thở',
+    '탄식': 'Thở dài',
+
+    // Crying / Screaming
+    '泣き声': 'Tiếng khóc',
+    'crying': 'Tiếng khóc',
+    'cries': 'Tiếng khóc',
+    'sob': 'Nấc nở',
+    'sobs': 'Nấc nở',
+    'sobbing': 'Nấc nở',
+    'screaming': 'Tiếng hét',
+    'screams': 'Tiếng hét',
+    'scream': 'Tiếng hét',
+    'shout': 'Tiếng la',
+    'shouting': 'Tiếng la',
+    '悲鳴': 'Tiếng hét',
+    '비명': 'Tiếng hét',
+
+    // Cough / Sneeze
+    'cough': 'Tiếng ho',
+    'coughing': 'Tiếng ho',
+    'coughs': 'Tiếng ho',
+    '咳': 'Tiếng ho',
+    'sneeze': 'Hắt hơi',
+    'sneezing': 'Hắt hơi',
+    'くしゃみ': 'Hắt hơi',
+
+    // Music / Noise
+    'music': 'Âm nhạc',
+    'bgm': 'Nhạc nền',
+    '音楽': 'Âm nhạc',
+    '음악': 'Âm nhạc',
+    'instrumental': 'Nhạc không lời',
+    'theme music': 'Nhạc chủ đề',
+  };
+
+  /**
+   * Resolve non-speech, action, and sound cues offline (0ms, 0 API quota)
+   * Examples: (拍手), [Applause], (笑), [Music], ♪, ♫
+   */
+  function resolveSoundCueOffline(text) {
+    if (!text) return '';
+    const trimmed = text.trim();
+
+    // Check musical symbols alone
+    if (/^[♪♫🎵\s\-–—]+$/.test(trimmed)) {
+      return trimmed;
+    }
+
+    // Check if whole text is enclosed in brackets or parentheses
+    // e.g. (拍手), [Applause], （笑い）, 【歓声】
+    const bracketMatch = trimmed.match(/^[\(\[\{（【〔〈《](.+?)[\)\]\}）】〕〉》]$/);
+    if (bracketMatch) {
+      const inner = bracketMatch[1].trim().toLowerCase();
+      for (const [key, val] of Object.entries(SOUND_CUE_MAP)) {
+        if (inner === key.toLowerCase() || inner.includes(key.toLowerCase())) {
+          const openChar = trimmed[0];
+          const closeChar = trimmed[trimmed.length - 1];
+          return `${openChar}${val}${closeChar}`;
+        }
+      }
+      if (/^[♪♫🎵\s]+$/.test(inner)) {
+        return trimmed;
+      }
+    }
+
+    // Direct standalone sound word
+    const lower = trimmed.toLowerCase();
+    if (SOUND_CUE_MAP[lower]) {
+      return `(${SOUND_CUE_MAP[lower]})`;
+    }
+
+    return '';
+  }
   /**
    * Extract video title from YouTube page DOM for contextual translation
    */
@@ -887,9 +998,19 @@
 
     lastCaptionText = currentText;
 
-    // 1. Check local synchronous cache (0ms instant return - atomic simultaneous display)
     const service = settings.translationService || 'google';
     const cacheKey = getCacheKey(service, settings.sourceLang, settings.targetLang, currentText);
+
+    // 0. Offline Sound & Action Cue Interceptor (0ms, 0 API Quota consumed!)
+    const soundOffline = resolveSoundCueOffline(currentText);
+    if (soundOffline) {
+      localCache.set(cacheKey, soundOffline);
+      renderSubtitlesSimultaneously(currentText, soundOffline);
+      chrome.runtime.sendMessage({ action: 'RECORD_QUOTA_SAVED', count: 1 }).catch(() => {});
+      return;
+    }
+
+    // 1. Check local synchronous cache (0ms instant return - atomic simultaneous display)
     const cached = localCache.get(cacheKey);
 
     if (cached) {
@@ -1003,6 +1124,22 @@
     const sl = settings.sourceLang || 'auto';
     const tl = settings.targetLang || 'vi';
 
+    // 0. Auto-resolve all sound/action cues directly into localCache offline (0ms, 0 API Quota)
+    let soundResolvedCount = 0;
+    videoTimedCues.forEach((c) => {
+      const sound = resolveSoundCueOffline(c.text);
+      if (sound) {
+        const key = getCacheKey(service, sl, tl, c.text);
+        if (!localCache.has(key)) {
+          localCache.set(key, sound);
+          soundResolvedCount++;
+        }
+      }
+    });
+    if (soundResolvedCount > 0) {
+      chrome.runtime.sendMessage({ action: 'RECORD_QUOTA_SAVED', count: soundResolvedCount }).catch(() => {});
+    }
+
     // 1. Identify all uncached cues across the entire video
     const uncachedCues = videoTimedCues.filter((c) => {
       return !localCache.has(getCacheKey(service, sl, tl, c.text));
@@ -1091,7 +1228,7 @@
 
     try {
       if (service === 'gemini' && settings.geminiApiKey) {
-        // High-density batch: 18 lines per request (compact, high-speed, genre-aware)
+        // High-density batch: 12-22 lines per request (compact, high-speed, genre-aware)
         const currentContext = getVideoContext();
         const currentStyle = settings.geminiStyle || 'auto';
         const currentPronoun = settings.geminiPronounRole || 'auto';
@@ -1107,7 +1244,9 @@
 
           if (settings.translationService !== 'gemini') break;
 
-          const batch = pretranslateQueue.splice(0, 18);
+          // Adaptive batch sizing: 12 lines for urgent immediate cues, 22 lines for background bulk cruise
+          const batchSize = pretranslateQueue.length > 25 ? 22 : 12;
+          const batch = pretranslateQueue.splice(0, batchSize);
           const toTranslate = batch.filter((txt) => !localCache.has(getCacheKey(service, sl, tl, txt)));
           if (toTranslate.length === 0) continue;
 
@@ -1246,7 +1385,13 @@
     const service = settings.translationService || 'google';
 
     if (activeText) {
+      const soundOffline = resolveSoundCueOffline(activeText);
       const cacheKey = getCacheKey(service, settings.sourceLang, settings.targetLang, activeText);
+      if (soundOffline) {
+        localCache.set(cacheKey, soundOffline);
+        renderSubtitlesSimultaneously(activeText, soundOffline);
+        return;
+      }
       const cached = localCache.get(cacheKey);
       if (cached) {
         renderSubtitlesSimultaneously(activeText, cached);
@@ -1256,7 +1401,13 @@
     } else {
       const cue = getCurrentCueAtTime(currentMs);
       if (cue && cue.text) {
+        const soundOffline = resolveSoundCueOffline(cue.text);
         const cacheKey = getCacheKey(service, settings.sourceLang, settings.targetLang, cue.text);
+        if (soundOffline) {
+          localCache.set(cacheKey, soundOffline);
+          renderSubtitlesSimultaneously(cue.text, soundOffline);
+          return;
+        }
         const cached = localCache.get(cacheKey);
         if (cached) {
           renderSubtitlesSimultaneously(cue.text, cached);

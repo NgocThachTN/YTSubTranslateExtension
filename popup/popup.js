@@ -41,8 +41,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const selectGeminiModel = document.getElementById('select-gemini-model');
   const selectGeminiStyle = document.getElementById('select-gemini-style');
   const selectGeminiPronoun = document.getElementById('select-gemini-pronoun');
-  const inputApiKey = document.getElementById('input-api-key');
   const inputGithubRepo = document.getElementById('input-github-repo');
+
+  // Quota monitor controls
+  const statRequestsToday = document.getElementById('stat-requests-today');
+  const statCuesTranslated = document.getElementById('stat-cues-translated');
+  const statQuotaSaved = document.getElementById('stat-quota-saved');
+  const statPacingSpeed = document.getElementById('stat-pacing-speed');
+  const quotaProgressFill = document.getElementById('quota-progress-fill');
+  const quotaUsagePercent = document.getElementById('quota-usage-percent');
+  const quotaKeyPool = document.getElementById('quota-key-pool');
+  const quotaStatusBanner = document.getElementById('quota-status-banner');
+  const quotaStatusText = document.getElementById('quota-status-text');
+  const btnCheckQuota = document.getElementById('btn-check-quota');
 
   // Update tab controls
   const tabUpdateDot = document.getElementById('tab-update-dot');
@@ -241,13 +252,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (selectGeminiModel) selectGeminiModel.value = currentSettings.geminiModel || 'gemini-3.5-flash-lite';
       if (selectGeminiStyle) selectGeminiStyle.value = currentSettings.geminiStyle || 'auto';
       if (selectGeminiPronoun) selectGeminiPronoun.value = currentSettings.geminiPronounRole || 'auto';
-      if (inputApiKey) inputApiKey.value = currentSettings.customApiKey || '';
 
       // Set Update controls
       if (inputGithubRepo) inputGithubRepo.value = currentSettings.githubRepo || 'NgocThachTN/YTSubTranslateExtension';
 
       updatePreview();
       queryCacheStats();
+      loadQuotaStats();
     } catch (err) {
       console.error('Failed to load settings:', err);
     }
@@ -366,10 +377,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     inputGeminiKey.addEventListener('input', () => {
       currentSettings.geminiApiKey = inputGeminiKey.value.trim();
       saveSettings(false);
+      loadQuotaStats();
     });
     inputGeminiKey.addEventListener('change', () => {
       currentSettings.geminiApiKey = inputGeminiKey.value.trim();
       saveSettings(true);
+      loadQuotaStats();
     });
   }
 
@@ -435,10 +448,92 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  if (inputApiKey) {
-    inputApiKey.addEventListener('change', () => {
-      currentSettings.customApiKey = inputApiKey.value.trim();
-      saveSettings(true);
+  /**
+   * Load and render real-time Gemini Quota & Usage Stats
+   */
+  async function loadQuotaStats() {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const data = await chrome.storage.local.get([
+        'gemini_requests_today',
+        'gemini_requests_date',
+        'gemini_cues_translated',
+        'gemini_quota_saved',
+      ]);
+
+      let requestsToday = data.gemini_requests_today || 0;
+      if (data.gemini_requests_date !== today) {
+        requestsToday = 0;
+      }
+
+      const cuesTranslated = data.gemini_cues_translated || 0;
+      const quotaSaved = data.gemini_quota_saved || 0;
+
+      // Calculate keys in pool
+      const rawKeys = (currentSettings.geminiApiKey || '').trim();
+      const keys = rawKeys.split(/[\n,;]+/).map((k) => k.trim()).filter((k) => k.length > 10);
+      const keyCount = Math.max(1, keys.length);
+      const maxRpd = keyCount * 1500;
+      const maxRpm = keyCount * 15;
+
+      if (statRequestsToday) statRequestsToday.textContent = `${requestsToday} / ${maxRpd.toLocaleString()}`;
+      if (statCuesTranslated) statCuesTranslated.textContent = cuesTranslated.toLocaleString();
+      if (statQuotaSaved) statQuotaSaved.textContent = `${quotaSaved.toLocaleString()} câu`;
+      if (statPacingSpeed) statPacingSpeed.textContent = `≤ ${maxRpm} RPM`;
+
+      const pct = Math.min(100, Math.round((requestsToday / maxRpd) * 100));
+      if (quotaProgressFill) quotaProgressFill.style.width = `${pct}%`;
+      if (quotaUsagePercent) quotaUsagePercent.textContent = `${pct}% Quota ngày đã dùng`;
+      if (quotaKeyPool) quotaKeyPool.textContent = `${keyCount} API Key (${maxRpd.toLocaleString()} RPD)`;
+    } catch (_) {}
+  }
+
+  if (btnCheckQuota) {
+    btnCheckQuota.addEventListener('click', () => {
+      const rawKey = (currentSettings.geminiApiKey || '').trim();
+      if (!rawKey) {
+        if (quotaStatusBanner) {
+          quotaStatusBanner.className = 'quota-badge-status warning';
+          if (quotaStatusText) quotaStatusText.textContent = 'Chưa cấu hình Gemini API Key. Vui lòng nhập key phía trên.';
+        }
+        showToast('Chưa nhập Gemini API Key');
+        return;
+      }
+
+      if (quotaStatusBanner) {
+        quotaStatusBanner.className = 'quota-badge-status ready';
+        if (quotaStatusText) quotaStatusText.textContent = 'Đang ping kiểm tra kết nối & hạn ngạch tới Google AI Studio...';
+      }
+      btnCheckQuota.disabled = true;
+
+      chrome.runtime.sendMessage({
+        action: 'CHECK_GEMINI_QUOTA',
+        apiKey: rawKey,
+        model: currentSettings.geminiModel || 'gemini-3.5-flash-lite'
+      }, (res) => {
+        btnCheckQuota.disabled = false;
+        loadQuotaStats();
+
+        if (res && res.success) {
+          if (quotaStatusBanner) {
+            quotaStatusBanner.className = 'quota-badge-status ready';
+            if (quotaStatusText) quotaStatusText.textContent = res.message || `Key hoạt động tốt • Ping: ${res.latencyMs}ms • Quota khả dụng`;
+          }
+          showToast(`Gemini API sẵn sàng! Ping: ${res.latencyMs}ms`);
+        } else if (res && res.status === 'rate_limited') {
+          if (quotaStatusBanner) {
+            quotaStatusBanner.className = 'quota-badge-status warning';
+            if (quotaStatusText) quotaStatusText.textContent = res.message || 'Tạm chạm giới hạn 15 RPM. Tự động phục hồi sau ít phút.';
+          }
+          showToast('Tạm chạm giới hạn 15 RPM');
+        } else {
+          if (quotaStatusBanner) {
+            quotaStatusBanner.className = 'quota-badge-status error';
+            if (quotaStatusText) quotaStatusText.textContent = `Lỗi Quota / Key: ${res?.error || 'Không thể xác thực key'}`;
+          }
+          showToast('Kiểm tra thất bại. Vui lòng kiểm tra lại key.');
+        }
+      });
     });
   }
 

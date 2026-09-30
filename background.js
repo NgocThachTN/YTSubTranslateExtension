@@ -541,13 +541,81 @@ Maintain exact line numbering (e.g. "1. <translation>"). Output ONLY the numbere
 ${promptLines}`;
 }
 
+let geminiKeyIndex = 0;
+
+/**
+ * Parse and clean multi-key pool (comma, semicolon, or newline separated)
+ */
+function getGeminiApiKeys(rawKey) {
+  if (!rawKey || typeof rawKey !== 'string') return [];
+  return rawKey
+    .split(/[\n,;]+/)
+    .map((k) => k.trim())
+    .filter((k) => k.length > 10);
+}
+
+/**
+ * Get next rotating Gemini API key
+ */
+function getNextGeminiApiKey(rawKey) {
+  const keys = getGeminiApiKeys(rawKey);
+  if (keys.length === 0) return rawKey ? rawKey.trim() : '';
+  const key = keys[geminiKeyIndex % keys.length];
+  geminiKeyIndex = (geminiKeyIndex + 1) % keys.length;
+  return key;
+}
+
+/**
+ * Record quota usage in chrome.storage.local
+ */
+async function recordGeminiQuotaUsage(linesCount = 1) {
+  try {
+    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    const data = await chrome.storage.local.get([
+      'gemini_requests_today',
+      'gemini_requests_date',
+      'gemini_cues_translated',
+      'gemini_quota_saved',
+    ]);
+
+    let requestsToday = data.gemini_requests_today || 0;
+    if (data.gemini_requests_date !== today) {
+      requestsToday = 0; // Reset for new day
+    }
+    requestsToday += 1;
+
+    const cuesTranslated = (data.gemini_cues_translated || 0) + linesCount;
+
+    await chrome.storage.local.set({
+      gemini_requests_today: requestsToday,
+      gemini_requests_date: today,
+      gemini_cues_translated: cuesTranslated,
+    });
+  } catch (_) {}
+}
+
+/**
+ * Record quota saved by offline noise filters & caching
+ */
+async function recordQuotaSaved(count = 1) {
+  try {
+    const data = await chrome.storage.local.get(['gemini_quota_saved']);
+    await chrome.storage.local.set({
+      gemini_quota_saved: (data.gemini_quota_saved || 0) + count,
+    });
+  } catch (_) {}
+}
+
 /**
  * Translate single subtitle line using Google Gemini AI API (Fast, low-latency, genre-aware)
  */
 async function translateWithGemini(text, sourceLang, targetLang, apiKey, model = 'gemini-3.5-flash-lite', videoTitle = '', style = 'auto', pronounRole = 'auto') {
-  if (!apiKey || !apiKey.trim()) {
+  const effectiveKey = getNextGeminiApiKey(apiKey);
+  if (!effectiveKey) {
     throw new Error('Missing Gemini API Key');
   }
+  recordGeminiQuotaUsage(1);
+
   const tl = targetLang || 'vi';
   const targetName = tl === 'vi' ? 'Vietnamese' : tl;
   const chosenModel = resolveGeminiModel(model);
@@ -557,7 +625,7 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
   const prompt = buildGeminiSubtitlePrompt(text, targetName, videoTitle, style, effectiveRole);
 
   const callModel = async (modelName) => {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(effectiveKey)}`;
     return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -621,7 +689,9 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
  */
 async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, model = 'gemini-3.5-flash-lite', videoTitle = '', style = 'auto', pronounRole = 'auto') {
   if (!lines || lines.length === 0) return [];
-  if (!apiKey || !apiKey.trim()) throw new Error('Missing Gemini API Key');
+  const effectiveKey = getNextGeminiApiKey(apiKey);
+  if (!effectiveKey) throw new Error('Missing Gemini API Key');
+  recordGeminiQuotaUsage(lines.length);
 
   const tl = targetLang || 'vi';
   const targetName = tl === 'vi' ? 'Vietnamese' : tl;
@@ -632,7 +702,7 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
   const prompt = buildGeminiBatchSubtitlePrompt(lines, targetName, videoTitle, style, effectiveRole);
 
   const callModel = async (modelName) => {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(effectiveKey)}`;
     return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -817,6 +887,108 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     )
       .then((trans) => sendResponse({ success: true, translation: trans, model: chosenModel }))
       .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (request.action === 'RECORD_QUOTA_SAVED') {
+    recordQuotaSaved(request.count || 1);
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (request.action === 'CHECK_GEMINI_QUOTA') {
+    (async () => {
+      const startTime = Date.now();
+      const rawKey = request.apiKey || '';
+      const keys = getGeminiApiKeys(rawKey);
+      const testKey = keys.length > 0 ? keys[0] : rawKey.trim();
+
+      if (!testKey) {
+        sendResponse({ success: false, error: 'Chưa cấu hình Gemini API Key' });
+        return;
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+      const stats = await chrome.storage.local.get([
+        'gemini_requests_today',
+        'gemini_requests_date',
+        'gemini_cues_translated',
+        'gemini_quota_saved'
+      ]);
+
+      let requestsToday = stats.gemini_requests_today || 0;
+      if (stats.gemini_requests_date !== today) {
+        requestsToday = 0;
+      }
+
+      try {
+        const chosenModel = resolveGeminiModel(request.model || 'gemini-3.5-flash-lite');
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(chosenModel)}:generateContent?key=${encodeURIComponent(testKey)}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'Hello' }] }],
+            generationConfig: { maxOutputTokens: 5 }
+          })
+        });
+
+        const latency = Date.now() - startTime;
+
+        if (res.ok) {
+          sendResponse({
+            success: true,
+            status: 'active',
+            latencyMs: latency,
+            requestsToday,
+            cuesTranslated: stats.gemini_cues_translated || 0,
+            quotaSaved: stats.gemini_quota_saved || 0,
+            keyCount: keys.length || 1,
+            maxRpd: (keys.length || 1) * 1500,
+            maxRpm: (keys.length || 1) * 15,
+            message: `Key hoạt động tốt • Ping: ${latency}ms • Quota sẵn sàng`
+          });
+        } else if (res.status === 429) {
+          sendResponse({
+            success: true,
+            status: 'rate_limited',
+            latencyMs: latency,
+            requestsToday,
+            cuesTranslated: stats.gemini_cues_translated || 0,
+            quotaSaved: stats.gemini_quota_saved || 0,
+            keyCount: keys.length || 1,
+            maxRpd: (keys.length || 1) * 1500,
+            maxRpm: (keys.length || 1) * 15,
+            message: 'Tạm thời chạm giới hạn 15 RPM • Vui lòng đợi 30s hoặc thêm key phụ'
+          });
+        } else {
+          let errText = `HTTP ${res.status}`;
+          try {
+            const errJson = await res.json();
+            if (errJson?.error?.message) errText = errJson.error.message;
+          } catch (_) {}
+          sendResponse({
+            success: false,
+            status: 'error',
+            error: errText,
+            requestsToday,
+            cuesTranslated: stats.gemini_cues_translated || 0,
+            quotaSaved: stats.gemini_quota_saved || 0,
+            keyCount: keys.length || 1
+          });
+        }
+      } catch (err) {
+        sendResponse({
+          success: false,
+          status: 'network_error',
+          error: err.message,
+          requestsToday,
+          cuesTranslated: stats.gemini_cues_translated || 0,
+          quotaSaved: stats.gemini_quota_saved || 0,
+          keyCount: keys.length || 1
+        });
+      }
+    })();
     return true;
   }
 
