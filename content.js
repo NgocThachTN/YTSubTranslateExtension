@@ -57,6 +57,7 @@
   let detectedCaptionLang = '';
   let videoTimedCues = []; // Chronological list of { startMs, durMs, text }
   let attachedVideoElement = null;
+  let lastTranslatedTail = []; // Rolling context tail: [{ original, translation }] to connect subsequent batches
 
   /**
    * Get current video playback time in milliseconds
@@ -1276,7 +1277,19 @@
 
           // Mega-Batch sizing: If remaining queue has <= 40 cues (e.g. whole song), take all in 1 single request!
           // Otherwise, pack up to 32 cues per batch to minimize total requests to the absolute minimum!
-          const batchSize = pretranslateQueue.length <= 40 ? pretranslateQueue.length : 32;
+          let batchSize = pretranslateQueue.length <= 40 ? pretranslateQueue.length : 32;
+
+          // Semantic boundary check: if batching partially, look for a sentence end (. ? ! ♪) around 24-32
+          if (pretranslateQueue.length > 40 && batchSize === 32) {
+            for (let i = 31; i >= 24; i--) {
+              const cueText = pretranslateQueue[i] || '';
+              if (/[\.\?\!♪♫\n]$/.test(cueText.trim()) || cueText.length < 15) {
+                batchSize = i + 1;
+                break;
+              }
+            }
+          }
+
           const batch = pretranslateQueue.splice(0, batchSize);
           const toTranslate = batch.filter((txt) => !localCache.has(getCacheKey(service, sl, tl, txt)));
           if (toTranslate.length === 0) continue;
@@ -1294,15 +1307,21 @@
               videoTitle: currentContext,
               style: currentStyle,
               pronounRole: currentPronoun,
+              contextTail: lastTranslatedTail.slice(-2),
             });
 
             if (response && response.success && Array.isArray(response.translations)) {
+              const newTail = [];
               toTranslate.forEach((orig, idx) => {
                 const trans = (response.translations[idx] || '').trim();
                 if (trans) {
                   localCache.set(getCacheKey(service, sl, tl, orig), trans);
+                  newTail.push({ original: orig, translation: trans });
                 }
               });
+              if (newTail.length > 0) {
+                lastTranslatedTail = newTail.slice(-2);
+              }
               console.log(`[YT ViSub] [Gemini Full-Video] Translated ${toTranslate.length} cues into cache. Remaining in queue: ${pretranslateQueue.length}`);
             } else if (response && response.error && response.error.includes('429')) {
               // Rate limit hit: backoff for 6 seconds, requeue items at front
@@ -1428,8 +1447,21 @@
     const uniqueUrgent = Array.from(new Set(urgentCues)).slice(0, 8);
     if (uniqueUrgent.length === 0) return;
 
-    // Remove from background cruise queue to prevent duplicate calls
-    pretranslateQueue = pretranslateQueue.filter((txt) => !uniqueUrgent.includes(txt));
+    // Retrieve preceding cue before targetTimeMs as context tail for seamless seeking
+    let expressTail = [];
+    if (lastTranslatedTail && lastTranslatedTail.length > 0) {
+      expressTail = lastTranslatedTail.slice(-2);
+    } else {
+      const priorCue = videoTimedCues
+        .filter((c) => c.startMs < targetTimeMs)
+        .slice(-1)[0];
+      if (priorCue && priorCue.text) {
+        const cachedPrior = localCache.get(getCacheKey(service, sl, tl, priorCue.text));
+        if (cachedPrior) {
+          expressTail = [{ original: priorCue.text, translation: cachedPrior }];
+        }
+      }
+    }
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -1442,15 +1474,21 @@
         videoTitle: getVideoContext(),
         style: settings.geminiStyle || 'auto',
         pronounRole: settings.geminiPronounRole || 'auto',
+        contextTail: expressTail,
       });
 
       if (response && response.success && Array.isArray(response.translations)) {
+        const newTail = [];
         uniqueUrgent.forEach((orig, idx) => {
           const trans = (response.translations[idx] || '').trim();
           if (trans) {
             localCache.set(getCacheKey(service, sl, tl, orig), trans);
+            newTail.push({ original: orig, translation: trans });
           }
         });
+        if (newTail.length > 0) {
+          lastTranslatedTail = newTail.slice(-2);
+        }
 
         // Upgrade active subtitle if it matches any translated cue
         const activeText = extractCaptionText();
@@ -1557,6 +1595,7 @@
       detectedCaptionLang = '';
       videoTimedCues = [];
       pretranslateQueue = [];
+      lastTranslatedTail = [];
       setTimeout(() => initPlayer(), 200);
     });
 
@@ -1565,6 +1604,7 @@
       detectedCaptionLang = '';
       videoTimedCues = [];
       pretranslateQueue = [];
+      lastTranslatedTail = [];
       setTimeout(() => initPlayer(), 200);
     });
 

@@ -574,7 +574,7 @@ Translate directly into natural, concise ${targetName} suitable for video subtit
 ${text}`;
 }
 
-function buildGeminiBatchSubtitlePrompt(lines, targetName, videoTitle = '', style = 'auto', pronounRole = 'auto') {
+function buildGeminiBatchSubtitlePrompt(lines, targetName, videoTitle = '', style = 'auto', pronounRole = 'auto', contextTail = []) {
   const contextLine = videoTitle ? `Video Context / Metadata: "${videoTitle.slice(0, 240)}"\n` : '';
   const effectiveGenre = resolveEffectiveGenre(style, videoTitle);
   const promptLines = lines.map((text, idx) => `${idx + 1}. ${text}`).join('\n');
@@ -593,10 +593,23 @@ function buildGeminiBatchSubtitlePrompt(lines, targetName, videoTitle = '', styl
   const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
   const pronounInstruction = targetName === 'Vietnamese' ? getPronounInstruction(effectiveRole, videoTitle, effectiveGenre) : '';
 
-  return `You are a world-class bilingual subtitle translator translating continuous video subtitles:
-${contextLine}${styleInstruction}${pronounInstruction}
+  let previousContextSection = '';
+  if (Array.isArray(contextTail) && contextTail.length > 0) {
+    const validTails = contextTail.filter((t) => t && t.original && t.translation);
+    if (validTails.length > 0) {
+      const tailFormatted = validTails
+        .map((t) => `- Earlier Line: "${t.original}" -> Translated: "${t.translation}"`)
+        .join('\n');
+      previousContextSection = `\nPREVIOUS TRANSLATED CONTEXT (NGỮ CẢNH ĐÃ DỊCH TRƯỚC ĐÓ - DÙNG ĐỂ NỐI MẠCH VĂN):
+The following line(s) were translated immediately prior to this batch. Use them to maintain seamless narrative flow, poetic rhyme, lyrical continuity, and consistent pronouns:
+${tailFormatted}
+MANDATORY DIRECTIVE: DO NOT re-translate the previous lines above! Output translations ONLY for the numbered lines below (1 to ${lines.length}). Connect pronouns and emotional tone seamlessly with the previous context!\n`;
+    }
+  }
 
-Maintain exact line numbering (e.g. "1. <translation>"). Output ONLY the numbered translated lines in ${targetName}:
+  return `You are a world-class bilingual subtitle translator translating continuous video subtitles:
+${contextLine}${styleInstruction}${pronounInstruction}${previousContextSection}
+Maintain exact line numbering (e.g. "1. <translation>"). Output ONLY the numbered translated lines in ${targetName}. Do NOT include explanations, previous lines, or metadata:
 ${promptLines}`;
 }
 
@@ -746,7 +759,7 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
 /**
  * Batch translate multiple subtitle lines in a single Gemini API call (High throughput, 0ms playback, genre-aware)
  */
-async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, model = 'gemini-3.5-flash-lite', videoTitle = '', style = 'auto', pronounRole = 'auto') {
+async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, model = 'gemini-3.5-flash-lite', videoTitle = '', style = 'auto', pronounRole = 'auto', contextTail = []) {
   if (!lines || lines.length === 0) return [];
   const effectiveKey = getNextGeminiApiKey(apiKey);
   if (!effectiveKey) throw new Error('Missing Gemini API Key');
@@ -758,7 +771,7 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
   const effectiveGenre = resolveEffectiveGenre(style, videoTitle);
   const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
 
-  const prompt = buildGeminiBatchSubtitlePrompt(lines, targetName, videoTitle, style, effectiveRole);
+  const prompt = buildGeminiBatchSubtitlePrompt(lines, targetName, videoTitle, style, effectiveRole, contextTail);
 
   const callModel = async (modelName) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(effectiveKey)}`;
@@ -931,7 +944,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       request.model || 'gemini-3.5-flash-lite',
       request.videoTitle || '',
       request.style || 'auto',
-      request.pronounRole || 'auto'
+      request.pronounRole || 'auto',
+      request.contextTail || []
     )
       .then((translations) => sendResponse({ success: true, translations }))
       .catch((err) => sendResponse({ success: false, error: err.message }));
