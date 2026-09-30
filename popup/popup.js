@@ -1,14 +1,22 @@
 /**
- * YouTube Subtitle Translator - Popup Script
- * Manages configuration UI, synchronizes with chrome.storage, and updates live preview.
+ * YT ViSub - Popup Script
+ * Tab navigation, live settings synchronization and cache statistics.
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // UI Elements
+  // Tab elements
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  const tabPanes = document.querySelectorAll('.tab-pane');
+
+  // General tab controls
   const toggleEnabled = document.getElementById('toggle-enabled');
-  const displayModeRadios = document.querySelectorAll('input[name="displayMode"]');
-  const selectSourceLang = document.getElementById('select-source-lang');
-  const selectTargetLang = document.getElementById('select-target-lang');
+  const toggleBilingual = document.getElementById('toggle-bilingual');
+  const checkHideNative = document.getElementById('check-hide-native');
+  const btnClearCache = document.getElementById('btn-clear-cache');
+  const statCacheCount = document.getElementById('stat-cache-count');
+  const statCacheSize = document.getElementById('stat-cache-size');
+
+  // Display tab controls
   const sliderFontSize = document.getElementById('slider-font-size');
   const fontSizeVal = document.getElementById('font-size-val');
   const sliderBgOpacity = document.getElementById('slider-bg-opacity');
@@ -17,24 +25,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   const colorTranslatedHex = document.getElementById('color-translated-hex');
   const colorOriginal = document.getElementById('color-original');
   const colorOriginalHex = document.getElementById('color-original-hex');
-  const origColorContainer = document.getElementById('orig-color-container');
-  const checkHideNative = document.getElementById('check-hide-native');
+  const origColorRow = document.getElementById('orig-color-row');
+  const presetPills = document.querySelectorAll('.preset-pill');
   const btnResetPos = document.getElementById('btn-reset-pos');
+
+  // Language tab controls
+  const selectSourceLang = document.getElementById('select-source-lang');
+  const selectTargetLang = document.getElementById('select-target-lang');
+
+  // Advanced tab controls
   const inputApiKey = document.getElementById('input-api-key');
-  const btnClearCache = document.getElementById('btn-clear-cache');
-  const cacheStatus = document.getElementById('cache-status');
-  const toast = document.getElementById('toast');
-  const mainContent = document.getElementById('main-content');
 
   // Preview elements
   const previewSubBox = document.getElementById('preview-sub-box');
+  const previewOrigWrapper = document.getElementById('preview-orig-wrapper');
   const previewOrigText = document.getElementById('preview-orig-text');
   const previewTransText = document.getElementById('preview-trans-text');
 
-  // Color preset buttons
-  const presetButtons = document.querySelectorAll('.preset-btn');
+  // Toast
+  const toast = document.getElementById('toast');
 
-  // Default state - Clean White YouTube subtitle matching
+  // Current settings state
   let currentSettings = {
     enabled: true,
     displayMode: 'bilingual',
@@ -42,7 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     targetLang: 'vi',
     fontSize: 20,
     fontColor: '#FFFFFF',
-    originalColor: '#D1D5DB',
+    originalColor: '#FFFFFF',
     bgOpacity: 75,
     subPosition: 'bottom',
     subBottomOffset: 60,
@@ -53,21 +64,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   let saveTimeout = null;
   let toastTimeout = null;
 
+  // Tab switching logic
+  tabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetTabId = btn.getAttribute('data-tab');
+      tabButtons.forEach((b) => b.classList.remove('active'));
+      tabPanes.forEach((p) => p.classList.remove('active'));
+
+      btn.classList.add('active');
+      const targetPane = document.getElementById(targetTabId);
+      if (targetPane) {
+        targetPane.classList.add('active');
+      }
+    });
+  });
+
   /**
    * Display toast notification
    */
-  function showToast(message = 'Đã lưu cài đặt!') {
+  function showToast(message = 'Đã lưu cài đặt') {
     if (!toast) return;
     toast.textContent = message;
     toast.classList.add('show');
     clearTimeout(toastTimeout);
     toastTimeout = setTimeout(() => {
       toast.classList.remove('show');
-    }, 1800);
+    }, 1600);
   }
 
   /**
-   * Update live preview styling based on current state
+   * Update live preview styling
    */
   function updatePreview() {
     if (!previewSubBox) return;
@@ -78,7 +104,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     previewSubBox.style.backgroundColor = bgVal;
     previewSubBox.style.fontSize = `${currentSettings.fontSize}px`;
 
-    const previewOrigWrapper = document.getElementById('preview-orig-wrapper');
     if (previewOrigWrapper) {
       previewOrigWrapper.style.display = isBilingual ? 'block' : 'none';
     }
@@ -86,27 +111,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (previewOrigText) {
       previewOrigText.style.fontSize = `${Math.round(currentSettings.fontSize * 0.92)}px`;
       previewOrigText.style.color = currentSettings.originalColor || '#FFFFFF';
-      previewOrigText.style.backgroundColor = 'transparent';
     }
 
     if (previewTransText) {
       previewTransText.style.fontSize = `${currentSettings.fontSize}px`;
       previewTransText.style.color = currentSettings.fontColor || '#FFFFFF';
-      previewTransText.style.backgroundColor = 'transparent';
     }
 
-    if (origColorContainer) {
-      origColorContainer.style.display = isBilingual ? 'flex' : 'none';
-    }
-
-    if (mainContent) {
-      mainContent.style.opacity = currentSettings.enabled ? '1' : '0.45';
-      mainContent.style.pointerEvents = currentSettings.enabled ? 'auto' : 'none';
+    if (origColorRow) {
+      origColorRow.style.display = isBilingual ? 'flex' : 'none';
     }
   }
 
   /**
-   * Save current settings to chrome.storage.sync
+   * Save settings to storage with debounce
    */
   function saveSettings(notify = true) {
     clearTimeout(saveTimeout);
@@ -115,34 +133,46 @@ document.addEventListener('DOMContentLoaded', async () => {
         await chrome.storage.sync.set(currentSettings);
         updatePreview();
         if (notify) {
-          showToast('Đã áp dụng thay đổi!');
+          showToast('Đã lưu cài đặt');
         }
       } catch (err) {
         console.error('Failed to save settings:', err);
       }
-    }, 150);
+    }, 120);
   }
 
   /**
-   * Populate UI from storage
+   * Fetch cache statistics from background
+   */
+  function queryCacheStats() {
+    chrome.runtime.sendMessage({ action: 'GET_CACHE_STATS' }, (res) => {
+      if (res && res.success) {
+        const count = res.size || 0;
+        if (statCacheCount) {
+          statCacheCount.textContent = count.toLocaleString('vi-VN');
+        }
+        if (statCacheSize) {
+          const estimatedKb = ((count * 180) / 1024).toFixed(2);
+          statCacheSize.textContent = `${estimatedKb} KB`;
+        }
+      }
+    });
+  }
+
+  /**
+   * Load stored settings
    */
   async function loadSettings() {
     try {
       const stored = await chrome.storage.sync.get(Object.keys(currentSettings));
       currentSettings = { ...currentSettings, ...stored };
 
-      // Set UI values
+      // Set General controls
       if (toggleEnabled) toggleEnabled.checked = currentSettings.enabled;
+      if (toggleBilingual) toggleBilingual.checked = currentSettings.displayMode === 'bilingual';
+      if (checkHideNative) checkHideNative.checked = currentSettings.hideOriginalNative;
 
-      displayModeRadios.forEach((radio) => {
-        if (radio.value === currentSettings.displayMode) {
-          radio.checked = true;
-        }
-      });
-
-      if (selectSourceLang) selectSourceLang.value = currentSettings.sourceLang || 'auto';
-      if (selectTargetLang) selectTargetLang.value = currentSettings.targetLang || 'vi';
-
+      // Set Display controls
       if (sliderFontSize) {
         sliderFontSize.value = currentSettings.fontSize;
         if (fontSizeVal) fontSizeVal.textContent = `${currentSettings.fontSize}px`;
@@ -163,7 +193,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (colorOriginalHex) colorOriginalHex.textContent = currentSettings.originalColor.toUpperCase();
       }
 
-      if (checkHideNative) checkHideNative.checked = currentSettings.hideOriginalNative;
+      // Set Language controls
+      if (selectSourceLang) selectSourceLang.value = currentSettings.sourceLang || 'auto';
+      if (selectTargetLang) selectTargetLang.value = currentSettings.targetLang || 'vi';
+
+      // Set Advanced controls
       if (inputApiKey) inputApiKey.value = currentSettings.customApiKey || '';
 
       updatePreview();
@@ -171,17 +205,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       console.error('Failed to load settings:', err);
     }
-  }
-
-  /**
-   * Fetch current translation cache statistics
-   */
-  function queryCacheStats() {
-    chrome.runtime.sendMessage({ action: 'GET_CACHE_STATS' }, (res) => {
-      if (res && res.success && cacheStatus) {
-        cacheStatus.textContent = `${res.size || 0} câu đã đệm`;
-      }
-    });
   }
 
   // Event Listeners
@@ -192,25 +215,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  displayModeRadios.forEach((radio) => {
-    radio.addEventListener('change', () => {
-      if (radio.checked) {
-        currentSettings.displayMode = radio.value;
-        saveSettings(true);
-      }
-    });
-  });
-
-  if (selectSourceLang) {
-    selectSourceLang.addEventListener('change', () => {
-      currentSettings.sourceLang = selectSourceLang.value;
+  if (toggleBilingual) {
+    toggleBilingual.addEventListener('change', () => {
+      currentSettings.displayMode = toggleBilingual.checked ? 'bilingual' : 'vietnamese_only';
       saveSettings(true);
     });
   }
 
-  if (selectTargetLang) {
-    selectTargetLang.addEventListener('change', () => {
-      currentSettings.targetLang = selectTargetLang.value;
+  if (checkHideNative) {
+    checkHideNative.addEventListener('change', () => {
+      currentSettings.hideOriginalNative = checkHideNative.checked;
       saveSettings(true);
     });
   }
@@ -251,9 +265,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  presetButtons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const color = btn.getAttribute('data-color');
+  presetPills.forEach((pill) => {
+    pill.addEventListener('click', () => {
+      const color = pill.getAttribute('data-color');
       if (color && colorTranslated) {
         colorTranslated.value = color;
         currentSettings.fontColor = color;
@@ -264,19 +278,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  if (checkHideNative) {
-    checkHideNative.addEventListener('change', () => {
-      currentSettings.hideOriginalNative = checkHideNative.checked;
-      saveSettings(true);
-    });
-  }
-
   if (btnResetPos) {
     btnResetPos.addEventListener('click', () => {
       currentSettings.subBottomOffset = 60;
       currentSettings.subPosition = 'bottom';
       saveSettings(true);
-      showToast('Đã đặt lại vị trí phụ đề!');
+      showToast('Đã đặt lại vị trí');
+    });
+  }
+
+  if (selectSourceLang) {
+    selectSourceLang.addEventListener('change', () => {
+      currentSettings.sourceLang = selectSourceLang.value;
+      saveSettings(true);
+    });
+  }
+
+  if (selectTargetLang) {
+    selectTargetLang.addEventListener('change', () => {
+      currentSettings.targetLang = selectTargetLang.value;
+      saveSettings(true);
     });
   }
 
@@ -291,13 +312,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnClearCache.addEventListener('click', () => {
       chrome.runtime.sendMessage({ action: 'CLEAR_CACHE' }, (res) => {
         if (res && res.success) {
-          if (cacheStatus) cacheStatus.textContent = '0 câu đã đệm';
-          showToast('Đã xóa bộ nhớ đệm!');
+          if (statCacheCount) statCacheCount.textContent = '0';
+          if (statCacheSize) statCacheSize.textContent = '0.00 KB';
+          showToast('Đã xóa bộ nhớ đệm');
         }
       });
     });
   }
 
-  // Load configuration initially
   loadSettings();
 });

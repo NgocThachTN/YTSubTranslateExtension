@@ -3,58 +3,240 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cài đặt Dịch Phụ Đề YouTube</title>
+  <title>YT ViSub - Cài đặt</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="popup-container">
-    <!-- Header -->
+    
+    <!-- Top Header -->
     <header class="header">
-      <div class="header-brand">
-        <img src="../icons/icon48.png" alt="Logo" class="logo-icon">
-        <div class="brand-text">
-          <h1 class="title">YT ViSub</h1>
-          <span class="subtitle">Dịch Phụ Đề YouTube</span>
+      <div class="header-left">
+        <img src="../icons/icon48.png" alt="YT ViSub Logo" class="brand-logo">
+        <div class="brand-info">
+          <span class="brand-title">YT ViSub</span>
+          <span class="brand-version">1.2.0</span>
         </div>
       </div>
-      <!-- Main Toggle Switch -->
-      <label class="switch" title="Bật / Tắt tiện ích">
-        <input type="checkbox" id="toggle-enabled" checked>
-        <span class="slider round"></span>
-      </label>
+      <div class="header-right">
+        <!-- Quick Social / Action Links -->
+        <a href="https://github.com" target="_blank" class="icon-link-btn" title="GitHub">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+          </svg>
+        </a>
+        <a href="https://translate.google.com" target="_blank" class="icon-link-btn" title="Google Translate">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm7.93 9h-3.95a15.65 15.65 0 00-1.37-5.06A8.02 8.02 0 0119.93 11zM12 4.07c.89 1.48 1.58 3.51 1.9 5.93H10.1c.32-2.42 1.01-4.45 1.9-5.93zM4.07 13h3.95c.14 1.83.63 3.6 1.37 5.06A8.02 8.02 0 014.07 13zm3.95-2H4.07a8.02 8.02 0 014.54-5.06A15.65 15.65 0 008.02 11zm3.98 8.93c-.89-1.48-1.58-3.51-1.9-5.93h3.8c-.32 2.42-1.01 4.45-1.9 5.93zm2.58-7.93H9.44c-.05-.66-.08-1.32-.08-2s.03-1.34.08-2h5.12c.05.66.08 1.32.08 2s-.03 1.34-.08 2zm1.01 5.06c.74-1.46 1.23-3.23 1.37-5.06h3.95a8.02 8.02 0 01-4.54 5.06z"/>
+          </svg>
+        </a>
+        <a href="https://youtube.com" target="_blank" class="icon-link-btn" title="YouTube">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+          </svg>
+        </a>
+      </div>
     </header>
 
+    <!-- Navigation Tabs (Better Lyrics style) -->
+    <nav class="nav-tabs">
+      <button type="button" class="tab-btn active" data-tab="tab-general">Chung</button>
+      <button type="button" class="tab-btn" data-tab="tab-display">Hiển thị</button>
+      <button type="button" class="tab-btn" data-tab="tab-language">Ngôn ngữ</button>
+      <button type="button" class="tab-btn" data-tab="tab-advanced">Nâng cao</button>
+    </nav>
+
     <!-- Main Content Area -->
-    <main class="main-content" id="main-content">
+    <main class="main-content">
 
-      <!-- Display Mode Selection -->
-      <section class="section">
-        <label class="section-title">Chế độ hiển thị</label>
-        <div class="mode-options">
-          <label class="radio-card">
-            <input type="radio" name="displayMode" value="bilingual" checked>
-            <div class="card-content">
-              <span class="card-label">Song ngữ</span>
-              <span class="card-desc">Gốc + Tiếng Việt</span>
+      <!-- TAB 1: Cài đặt chung -->
+      <div id="tab-general" class="tab-pane active">
+        <div class="setting-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <svg class="card-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1 0 .33.03.65.07.97l-2.11 1.66c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.06.74 1.69.99l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.26 1.17-.59 1.69-.99l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.66z"/>
+              </svg>
+              <h2 class="card-title">Cài đặt chung</h2>
             </div>
-          </label>
-          <label class="radio-card">
-            <input type="radio" name="displayMode" value="vietnamese_only">
-            <div class="card-content">
-              <span class="card-label">Chỉ Tiếng Việt</span>
-              <span class="card-desc">Bản dịch chuẩn</span>
+            <p class="card-desc">Các thiết lập ảnh hưởng đến hoạt động chung của YT ViSub.</p>
+          </div>
+
+          <div class="card-body">
+            <!-- Row: Bật tiện ích -->
+            <div class="setting-row">
+              <span class="row-label">Bật dịch phụ đề</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-enabled" checked>
+                <span class="toggle-slider"></span>
+              </label>
             </div>
-          </label>
+
+            <!-- Row: Chế độ song ngữ -->
+            <div class="setting-row">
+              <div class="row-text-group">
+                <span class="row-label">Chế độ song ngữ</span>
+                <span class="row-sublabel">Hiển thị cả phụ đề gốc và Tiếng Việt</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-bilingual" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <!-- Row: Ẩn phụ đề YouTube gốc -->
+            <div class="setting-row">
+              <div class="row-text-group">
+                <span class="row-label">Tự động ẩn phụ đề gốc YouTube</span>
+                <span class="row-sublabel">Tránh hiện tượng đè chữ mặc định</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="check-hide-native" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <!-- Row: Xóa bộ nhớ đệm -->
+            <div class="setting-row">
+              <span class="row-label">Bộ nhớ đệm</span>
+              <button type="button" id="btn-clear-cache" class="btn-danger-pill">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                  <path d="M19 4h-3.5l-1-1h-5l-1 1H5v2h14M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12z"/>
+                </svg>
+                Xóa bộ nhớ đệm
+              </button>
+            </div>
+
+            <!-- Inset Stats Box (Exact Better Lyrics styling) -->
+            <div class="stats-inset-box">
+              <div class="stats-line">
+                <span class="stats-title">Toàn bộ câu phụ đề đã được lưu vào bộ nhớ đệm</span>
+                <span class="stats-dots"></span>
+                <span id="stat-cache-count" class="stats-value">0</span>
+              </div>
+              <div class="stats-line">
+                <span class="stats-title">Dung lượng bộ nhớ đệm ước tính</span>
+                <span class="stats-dots"></span>
+                <span id="stat-cache-size" class="stats-value">0.00 KB</span>
+              </div>
+              <div class="stats-line">
+                <span class="stats-title">Độ trễ hiển thị phụ đề</span>
+                <span class="stats-dots"></span>
+                <span class="stats-value text-accent">Tức thì (0ms)</span>
+              </div>
+            </div>
+
+          </div>
         </div>
-      </section>
+      </div>
 
-      <!-- Language Selection -->
-      <section class="section">
-        <div class="grid-2-col">
-          <div class="form-group">
-            <label for="select-source-lang" class="form-label">Ngôn ngữ gốc</label>
-            <div class="select-wrapper">
-              <select id="select-source-lang">
+      <!-- TAB 2: Hiển thị -->
+      <div id="tab-display" class="tab-pane">
+        <div class="setting-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <svg class="card-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4a1 1 0 0 0 1.41 1.41l1.79-.62A8.96 8.96 0 0 0 12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 16c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+              </svg>
+              <h2 class="card-title">Giao diện phụ đề</h2>
+            </div>
+            <p class="card-desc">Tùy chỉnh kiểu dáng và kích thước hiển thị của khối phụ đề.</p>
+          </div>
+
+          <div class="card-body">
+            <!-- Row: Cỡ chữ -->
+            <div class="setting-row-vertical">
+              <div class="row-header-inline">
+                <span class="row-label">Cỡ chữ phụ đề</span>
+                <span id="font-size-val" class="pill-badge">20px</span>
+              </div>
+              <input type="range" id="slider-font-size" min="14" max="36" step="1" value="20" class="range-slider">
+            </div>
+
+            <!-- Row: Độ tối phông nền -->
+            <div class="setting-row-vertical">
+              <div class="row-header-inline">
+                <span class="row-label">Độ tối phông nền</span>
+                <span id="bg-opacity-val" class="pill-badge">75%</span>
+              </div>
+              <input type="range" id="slider-bg-opacity" min="0" max="95" step="5" value="75" class="range-slider">
+            </div>
+
+            <!-- Row: Màu sắc -->
+            <div class="setting-row">
+              <span class="row-label">Màu chữ dịch</span>
+              <div class="color-picker-wrap">
+                <input type="color" id="color-translated" value="#FFFFFF">
+                <span id="color-translated-hex" class="color-code">#FFFFFF</span>
+              </div>
+            </div>
+
+            <div class="setting-row" id="orig-color-row">
+              <span class="row-label">Màu chữ gốc</span>
+              <div class="color-picker-wrap">
+                <input type="color" id="color-original" value="#FFFFFF">
+                <span id="color-original-hex" class="color-code">#FFFFFF</span>
+              </div>
+            </div>
+
+            <!-- Quick color presets -->
+            <div class="setting-row">
+              <span class="row-label">Mẫu màu sẵn</span>
+              <div class="preset-colors-row">
+                <button type="button" class="preset-pill" data-color="#FFFFFF" style="background:#FFFFFF;" title="Trắng"></button>
+                <button type="button" class="preset-pill" data-color="#E5E7EB" style="background:#E5E7EB;" title="Xám"></button>
+                <button type="button" class="preset-pill" data-color="#FDE047" style="background:#FDE047;" title="Vàng"></button>
+                <button type="button" class="preset-pill" data-color="#7DD3FC" style="background:#7DD3FC;" title="Xanh lơ"></button>
+                <button type="button" class="preset-pill" data-color="#86EFAC" style="background:#86EFAC;" title="Xanh ngọc"></button>
+              </div>
+            </div>
+
+            <!-- Row: Vị trí phụ đề -->
+            <div class="setting-row">
+              <div class="row-text-group">
+                <span class="row-label">Vị trí phụ đề</span>
+                <span class="row-sublabel">Đặt lại vị trí căn đáy mặc định</span>
+              </div>
+              <button type="button" id="btn-reset-pos" class="btn-subtle">Đặt lại vị trí</button>
+            </div>
+
+            <!-- Live Preview Card Box -->
+            <div class="preview-area-wrapper">
+              <span class="preview-area-label">Xem trước giao diện</span>
+              <div class="preview-display-stage">
+                <div id="preview-sub-box" class="preview-unified-box">
+                  <div id="preview-orig-wrapper" class="preview-line-orig-wrap">
+                    <span id="preview-orig-text" class="preview-text-orig">今日までの日々を宝物と思う</span>
+                  </div>
+                  <div id="preview-trans-wrapper" class="preview-line-trans-wrap">
+                    <span id="preview-trans-text" class="preview-text-trans">Tôi coi những ngày cho đến ngày hôm nay là kho báu.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Ngôn ngữ -->
+      <div id="tab-language" class="tab-pane">
+        <div class="setting-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <svg class="card-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M12.87 15.07l-2.54-2.51.03-.08A19.86 19.86 0 0 0 13.08 7h2.92V5h-6V3H8v2H2v2h9.17a17.9 17.9 0 0 1-2.28 4.28 17.8 17.8 0 0 1-1.63-2.28H5.19c.63 1.25 1.45 2.42 2.41 3.46l-4.5 4.47 1.41 1.41 4.49-4.47 3.37 3.37.5-.17zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
+              </svg>
+              <h2 class="card-title">Cấu hình ngôn ngữ</h2>
+            </div>
+            <p class="card-desc">Thiết lập ngôn ngữ nhận diện nguồn và ngôn ngữ dịch đích.</p>
+          </div>
+
+          <div class="card-body">
+            <!-- Row: Ngôn ngữ gốc -->
+            <div class="setting-row">
+              <span class="row-label">Ngôn ngữ gốc</span>
+              <select id="select-source-lang" class="custom-select">
                 <option value="auto">Tự động nhận diện</option>
                 <option value="en">Tiếng Anh (English)</option>
                 <option value="ja">Tiếng Nhật (日本語)</option>
@@ -68,125 +250,81 @@
                 <option value="th">Tiếng Thái (ไทย)</option>
               </select>
             </div>
-          </div>
-          <div class="form-group">
-            <label for="select-target-lang" class="form-label">Dịch sang</label>
-            <div class="select-wrapper">
-              <select id="select-target-lang">
+
+            <!-- Row: Dịch sang -->
+            <div class="setting-row">
+              <span class="row-label">Dịch sang</span>
+              <select id="select-target-lang" class="custom-select">
                 <option value="vi" selected>Tiếng Việt</option>
                 <option value="en">Tiếng Anh</option>
               </select>
             </div>
-          </div>
-        </div>
-      </section>
 
-      <!-- Subtitle Style Customization -->
-      <section class="section">
-        <label class="section-title">Giao diện phụ đề</label>
-        
-        <!-- Font Size Slider -->
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Cỡ chữ</span>
-            <span id="font-size-val" class="val-badge">20px</span>
-          </div>
-          <input type="range" id="slider-font-size" min="14" max="36" step="1" value="20">
-        </div>
-
-        <!-- Background Opacity Slider -->
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Độ tối nền viền chữ</span>
-            <span id="bg-opacity-val" class="val-badge">75%</span>
-          </div>
-          <input type="range" id="slider-bg-opacity" min="0" max="95" step="5" value="75">
-        </div>
-
-        <!-- Subtitle Colors -->
-        <div class="grid-2-col color-settings">
-          <div class="color-item">
-            <label class="form-label" for="color-translated">Màu chữ dịch</label>
-            <div class="color-input-wrapper">
-              <input type="color" id="color-translated" value="#FFFFFF">
-              <span id="color-translated-hex" class="hex-text">#FFFFFF</span>
+            <!-- Info box -->
+            <div class="stats-inset-box">
+              <div class="stats-line">
+                <span class="stats-title">Phương thức dịch</span>
+                <span class="stats-dots"></span>
+                <span class="stats-value">Google Translate API</span>
+              </div>
+              <div class="stats-line">
+                <span class="stats-title">Định dạng kết quả</span>
+                <span class="stats-dots"></span>
+                <span class="stats-value">Chuẩn hóa UTF-8</span>
+              </div>
             </div>
+
           </div>
-          <div class="color-item" id="orig-color-container">
-            <label class="form-label" for="color-original">Màu chữ gốc</label>
-            <div class="color-input-wrapper">
-              <input type="color" id="color-original" value="#FFFFFF">
-              <span id="color-original-hex" class="hex-text">#FFFFFF</span>
+        </div>
+      </div>
+
+      <!-- TAB 4: Nâng cao -->
+      <div id="tab-advanced" class="tab-pane">
+        <div class="setting-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <svg class="card-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+              </svg>
+              <h2 class="card-title">Tùy chọn nâng cao</h2>
             </div>
+            <p class="card-desc">Cấu hình API riêng biệt và các tham số hiệu năng hệ thống.</p>
           </div>
-        </div>
 
-        <!-- Quick Color Presets -->
-        <div class="color-presets">
-          <span class="preset-label">Mẫu màu:</span>
-          <button type="button" class="preset-btn" data-color="#FFFFFF" style="background:#FFFFFF;" title="Trắng chuẩn YouTube"></button>
-          <button type="button" class="preset-btn" data-color="#E5E7EB" style="background:#E5E7EB;" title="Xám sáng"></button>
-          <button type="button" class="preset-btn" data-color="#FDE047" style="background:#FDE047;" title="Vàng dịu"></button>
-          <button type="button" class="preset-btn" data-color="#7DD3FC" style="background:#7DD3FC;" title="Xanh lơ"></button>
-          <button type="button" class="preset-btn" data-color="#86EFAC" style="background:#86EFAC;" title="Xanh mint"></button>
-        </div>
-
-        <!-- Native Subtitle Options -->
-        <div class="checkbox-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="check-hide-native" checked>
-            <span>Ẩn phụ đề mặc định của YouTube (tránh trùng chữ)</span>
-          </label>
-        </div>
-
-        <div class="button-row">
-          <button type="button" id="btn-reset-pos" class="btn btn-secondary">
-            Đặt lại vị trí phụ đề
-          </button>
-        </div>
-      </section>
-
-      <!-- Subtitle Live Preview Box -->
-      <section class="section preview-section">
-        <label class="section-title">Xem trước</label>
-        <div class="preview-box-container">
-          <div id="preview-sub-box" class="preview-sub-box">
-            <div id="preview-orig-wrapper" class="preview-line-wrapper">
-              <span id="preview-orig-text" class="preview-line-orig">それでもいつか きっと会えるだろう</span>
+          <div class="card-body">
+            <!-- Row: API Key -->
+            <div class="setting-row-vertical">
+              <div class="row-header-inline">
+                <span class="row-label">Google Cloud API Key (Tùy chọn)</span>
+                <span class="row-sublabel">Để trống để sử dụng API miễn phí</span>
+              </div>
+              <input type="password" id="input-api-key" placeholder="AIzaSy..." class="custom-input">
             </div>
-            <div id="preview-trans-wrapper" class="preview-line-wrapper">
-              <span id="preview-trans-text" class="preview-line-trans">Nhưng tôi chắc chắn chúng ta sẽ gặp lại nhau vào một ngày nào đó.</span>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <!-- Advanced Settings (Collapsible) -->
-      <details class="section advanced-details">
-        <summary class="section-title advanced-summary">Tùy chọn nâng cao & API</summary>
-        <div class="advanced-body">
-          <p class="advanced-hint">
-            Mặc định tiện ích sử dụng Google Translate Web API miễn phí không giới hạn. Nếu muốn dùng Google Cloud Translation API chính thức, hãy dán API Key vào ô dưới:
-          </p>
-          <div class="form-group">
-            <label for="input-api-key" class="form-label">Google Cloud API Key (Tùy chọn)</label>
-            <input type="password" id="input-api-key" placeholder="AIzaSy..." class="text-input">
-          </div>
-          <div class="cache-controls">
-            <button type="button" id="btn-clear-cache" class="btn btn-warning">
-              Xóa bộ nhớ đệm
-            </button>
-            <span id="cache-status" class="cache-status-text">Đã lưu đệm</span>
+            <!-- Inset Stats Box -->
+            <div class="stats-inset-box">
+              <div class="stats-line">
+                <span class="stats-title">Công nghệ đồng bộ</span>
+                <span class="stats-dots"></span>
+                <span class="stats-value">Main World Interceptor</span>
+              </div>
+              <div class="stats-line">
+                <span class="stats-title">Phiên bản giao thức</span>
+                <span class="stats-dots"></span>
+                <span class="stats-value">Manifest V3</span>
+              </div>
+              <div class="stats-line">
+                <span class="stats-title">Bộ nhớ đệm phiên</span>
+                <span class="stats-dots"></span>
+                <span class="stats-value text-accent">Kích hoạt</span>
+              </div>
+            </div>
+
           </div>
         </div>
-      </details>
+      </div>
 
     </main>
-
-    <!-- Footer -->
-    <footer class="footer">
-      <span class="footer-tip">Mẹo: Có thể kéo thả phụ đề trực tiếp trên video để đổi vị trí.</span>
-    </footer>
 
     <!-- Toast Notification -->
     <div id="toast" class="toast">Đã lưu cài đặt</div>
