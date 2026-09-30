@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cài đặt Dịch Phụ Đề YouTube</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-brand">
+        <img src="../icons/icon48.png" alt="Logo" class="logo-icon">
+        <div class="brand-text">
+          <h1 class="title">YT ViSub</h1>
+          <span class="subtitle">Dịch Phụ Đề YouTube</span>
+        </div>
+      </div>
+      <!-- Main Toggle Switch -->
+      <label class="switch" title="Bật / Tắt tiện ích">
+        <input type="checkbox" id="toggle-enabled" checked>
+        <span class="slider round"></span>
+      </label>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content" id="main-content">
+
+      <!-- Display Mode Selection -->
+      <section class="section">
+        <label class="section-title">Chế độ hiển thị</label>
+        <div class="mode-options">
+          <label class="radio-card">
+            <input type="radio" name="displayMode" value="bilingual" checked>
+            <div class="card-content">
+              <span class="card-icon">🔤</span>
+              <span class="card-label">Song ngữ</span>
+              <span class="card-desc">Gốc + Tiếng Việt</span>
+            </div>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="displayMode" value="vietnamese_only">
+            <div class="card-content">
+              <span class="card-icon">🇻🇳</span>
+              <span class="card-label">Chỉ Tiếng Việt</span>
+              <span class="card-desc">Bản dịch duy nhất</span>
+            </div>
+          </label>
+        </div>
+      </section>
+
+      <!-- Language Selection -->
+      <section class="section">
+        <div class="grid-2-col">
+          <div class="form-group">
+            <label for="select-source-lang" class="form-label">Ngôn ngữ gốc (Nguồn)</label>
+            <div class="select-wrapper">
+              <select id="select-source-lang">
+                <option value="auto">🌐 Tự động nhận diện</option>
+                <option value="en">🇺🇸 Tiếng Anh (English)</option>
+                <option value="ja">🇯🇵 Tiếng Nhật (日本語)</option>
+                <option value="ko">🇰🇷 Tiếng Hàn (한국어)</option>
+                <option value="zh-CN">🇨🇳 Tiếng Trung (Giản thể)</option>
+                <option value="zh-TW">🇹🇼 Tiếng Trung (Phồn thể)</option>
+                <option value="fr">🇫🇷 Tiếng Pháp (Français)</option>
+                <option value="de">🇩🇪 Tiếng Đức (Deutsch)</option>
+                <option value="ru">🇷🇺 Tiếng Nga (Русский)</option>
+                <option value="es">🇪🇸 Tiếng Tây Ban Nha (Español)</option>
+                <option value="th">🇹🇭 Tiếng Thái (ไทย)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="select-target-lang" class="form-label">Dịch sang (Đích)</label>
+            <div class="select-wrapper">
+              <select id="select-target-lang">
+                <option value="vi" selected>🇻🇳 Tiếng Việt</option>
+                <option value="en">🇺🇸 Tiếng Anh</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Subtitle Style Customization -->
+      <section class="section">
+        <label class="section-title">Tùy chỉnh giao diện phụ đề</label>
+        
+        <!-- Font Size Slider -->
+        <div class="slider-group">
+          <div class="slider-header">
+            <span>Cỡ chữ phụ đề</span>
+            <span id="font-size-val" class="val-badge">20px</span>
+          </div>
+          <input type="range" id="slider-font-size" min="14" max="36" step="1" value="20">
+        </div>
+
+        <!-- Background Opacity Slider -->
+        <div class="slider-group">
+          <div class="slider-header">
+            <span>Độ mờ nền phụ đề</span>
+            <span id="bg-opacity-val" class="val-badge">65%</span>
+          </div>
+          <input type="range" id="slider-bg-opacity" min="0" max="95" step="5" value="65">
+        </div>
+
+        <!-- Subtitle Colors -->
+        <div class="grid-2-col color-settings">
+          <div class="color-item">
+            <label class="form-label" for="color-translated">Màu chữ dịch</label>
+            <div class="color-input-wrapper">
+              <input type="color" id="color-translated" value="#FFE600">
+              <span id="color-translated-hex" class="hex-text">#FFE600</span>
+            </div>
+          </div>
+          <div class="color-item" id="orig-color-container">
+            <label class="form-label" for="color-original">Màu chữ gốc</label>
+            <div class="color-input-wrapper">
+              <input type="color" id="color-original" value="#FFFFFF">
+              <span id="color-original-hex" class="hex-text">#FFFFFF</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Color Presets -->
+        <div class="color-presets">
+          <span class="preset-label">Mẫu màu nhanh:</span>
+          <button type="button" class="preset-btn" data-color="#FFE600" style="background:#FFE600;" title="Vàng Neon"></button>
+          <button type="button" class="preset-btn" data-color="#00E5FF" style="background:#00E5FF;" title="Xanh Cyan"></button>
+          <button type="button" class="preset-btn" data-color="#00FF88" style="background:#00FF88;" title="Xanh Ngọc"></button>
+          <button type="button" class="preset-btn" data-color="#FFFFFF" style="background:#FFFFFF;" title="Trắng Sáng"></button>
+          <button type="button" class="preset-btn" data-color="#FF5252" style="background:#FF5252;" title="Đỏ Cam"></button>
+        </div>
+
+        <!-- Position & Native Subtitle Options -->
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="check-hide-native" checked>
+            <span>Ẩn phụ đề mặc định của YouTube (tránh bị trùng chữ)</span>
+          </label>
+        </div>
+
+        <div class="button-row">
+          <button type="button" id="btn-reset-pos" class="btn btn-secondary">
+            <span>↺</span> Đặt lại vị trí phụ đề
+          </button>
+        </div>
+      </section>
+
+      <!-- Subtitle Live Preview Box -->
+      <section class="section preview-section">
+        <label class="section-title">Xem trước hiển thị</label>
+        <div class="preview-box-container">
+          <div id="preview-sub-box" class="preview-sub-box">
+            <div id="preview-orig-text" class="preview-line-orig">Welcome to this YouTube tutorial.</div>
+            <div id="preview-trans-text" class="preview-line-trans">Chào mừng bạn đến với bài hướng dẫn YouTube này.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Advanced Settings (Collapsible) -->
+      <details class="section advanced-details">
+        <summary class="section-title advanced-summary">⚙️ Tùy chọn nâng cao & Google API</summary>
+        <div class="advanced-body">
+          <p class="advanced-hint">
+            Mặc định tiện ích sử dụng <strong>Google Translate Web API miễn phí</strong> không giới hạn. Nếu muốn dùng Google Cloud Translation API chính thức của bạn, hãy dán API Key vào ô dưới:
+          </p>
+          <div class="form-group">
+            <label for="input-api-key" class="form-label">Google Cloud Translation API Key (Tùy chọn)</label>
+            <input type="password" id="input-api-key" placeholder="AIzaSy..." class="text-input">
+          </div>
+          <div class="cache-controls">
+            <button type="button" id="btn-clear-cache" class="btn btn-warning">
+              🗑️ Xóa bộ nhớ đệm dịch
+            </button>
+            <span id="cache-status" class="cache-status-text">Đã lưu đệm</span>
+          </div>
+        </div>
+      </details>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span class="footer-tip">💡 <strong>Mẹo:</strong> Bạn có thể dùng chuột kéo thả phụ đề trực tiếp trên video để đổi vị trí!</span>
+    </footer>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">Đã lưu cài đặt!</div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF1E27"/>
+      <stop offset="100%" stop-color="#C40018"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <!-- Outer Rounded Rectangle -->
+  <rect width="128" height="128" rx="28" fill="url(#bgGrad)"/>
+  
+  <!-- Subtitle Container Box -->
+  <rect x="18" y="24" width="92" height="74" rx="14" fill="#121620" stroke="#FFFFFF" stroke-width="3.5" filter="url(#shadow)"/>
+  
+  <!-- Original Subtitle Bar (White) -->
+  <rect x="28" y="38" width="56" height="8" rx="4" fill="#FFFFFF" opacity="0.95"/>
+  <rect x="28" y="52" width="72" height="8" rx="4" fill="#FFFFFF" opacity="0.95"/>
+  
+  <!-- Translated Subtitle Bar (Yellow/Gold) -->
+  <rect x="28" y="68" width="64" height="9" rx="4.5" fill="#FFE600"/>
+  <rect x="28" y="81" width="42" height="8" rx="4" fill="#FFE600"/>
+  
+  <!-- Active Badge (Bottom Right) -->
+  <circle cx="102" cy="102" r="14" fill="#00E676" stroke="#FFFFFF" stroke-width="3"/>
+  <path d="M96 102 L100 106 L108 98" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
