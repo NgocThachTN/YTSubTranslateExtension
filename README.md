@@ -30,7 +30,17 @@ Hệ thống cho phép người dùng linh hoạt lựa chọn giữa các máy 
 
 ### 2.3. Google Gemini AI (Biên dịch tự nhiên và ngữ cảnh thông minh)
 - Phương thức: Kết nối trực tiếp tới mô hình ngôn ngữ lớn Google Gemini (mặc định Gemini 3.5 Flash-Lite siêu nhanh, độ trễ cực thấp; hỗ trợ Gemini 3.5 Flash) thông qua API Key miễn phí từ Google AI Studio.
-- Đặc điểm: Thấu hiểu ngữ cảnh video, sắc thái hội thoại, tiếng lóng và đại từ nhân xưng phù hợp phong cách phim ảnh. Tích hợp cơ chế dịch trước theo khối (Batch Pre-translation 15 câu/lần), bộ lọc chống rung câu thoại (Caption Debounce 180ms), hiển thị song ngữ tức thì 0ms, và tự động chuyển đổi dự phòng thông minh (Gemini 3.5 Flash-Lite -> Gemini 3.5 Flash -> Google Translate) khi mất kết nối mạng hoặc chạm giới hạn hạn ngạch.
+- Hệ thống nhận diện thể loại thích ứng (Genre-Adaptive Intelligence):
+  - **Lời bài hát / Âm nhạc (Lyrics & Music):** Tự động nhận diện video âm nhạc (qua tiêu đề MV/Lyrics/Official Music Video và ký hiệu nốt nhạc `♪`, `♫`). Biên dịch giàu cảm xúc, có chất thơ và nhịp điệu (rhythmic & poetic flow), giữ nguyên các ký hiệu nốt nhạc `♪` / `♫`, dịch theo khổ đoạn để đảm bảo vần điệu xuyên suốt.
+  - **Báo chí & Phóng sự (News & Documentaries):** Văn phong báo chí chuẩn mực, khách quan, trang trọng, mạch lạc, thuật ngữ tin tức chính xác.
+  - **Hội thoại đời thường & Vlogs:** Văn phong tự nhiên, gần gũi, dí dỏm, đại từ nhân xưng linh hoạt phù hợp sắc thái giao tiếp.
+  - **Tự động tra cứu danh tính nghệ sĩ & Chuẩn hóa vai vế (Artist Identification & Pronoun Alignment):**
+    - Trích xuất chính xác tên nghệ sĩ (`Artist`) và tên bài hát (`Song`) từ siêu dữ liệu chính thức của YouTube (`ytd-metadata-row-renderer`), cấu trúc tiêu đề `Artist - Song`, và tên kênh phát.
+    - Kết hợp từ điển nhận diện nghệ sĩ mở rộng (US-UK, K-Pop, J-Pop, V-Pop, Indie) và cơ chế tra cứu tri thức trực tiếp của Gemini để xác định giới tính ca sĩ (ví dụ: Laufey, Aimer, Taylor Swift là Nữ -> xưng "Em - Anh"; Keshi, Joji, Fujii Kaze là Nam -> xưng "Anh - Em").
+    - Triệt tiêu hoàn toàn hiện tượng nhảy ngôi xưng hỗn loạn (*lúc tôi, lúc mình, lúc em/anh*) bằng quy tắc cấm dùng đại từ lệch pha xuyên suốt toàn bộ bài hát.
+    - Hỗ trợ bộ chọn chủ động trong cài đặt (`Tự động theo ca sĩ`, `Nữ hát: Em - Anh`, `Nam hát: Anh - Em`, `Trung tính: Tôi - Bạn`).
+  - **Tự động nhận diện (Auto-detect):** Dựa vào tiêu đề video và tín hiệu phụ đề để tự động chuyển phong cách dịch tối ưu mà người dùng không cần thao tác thủ công.
+- Cơ chế hiệu năng cao: Tích hợp cơ chế dịch trước theo khối (Batch Pre-translation 15 câu/lần), bộ lọc chống rung câu thoại, hiển thị song ngữ tức thì 0ms, và tự động chuyển đổi dự phòng thông minh (Gemini 3.5 Flash-Lite -> Gemini 3.5 Flash -> Google Translate) khi mất kết nối mạng hoặc chạm giới hạn hạn ngạch.
 
 ### 2.4. MyMemory Translated (Dịch thuật ngữ cảnh phân tán)
 - Phương thức: Tích hợp cơ sở dữ liệu bộ nhớ dịch thuật phân tán MyMemory Translated API kết hợp thuật toán tự động nhận diện hệ chữ viết (Script Detection) và chuyển đổi dự phòng.
@@ -81,13 +91,41 @@ Hệ thống cho phép người dùng linh hoạt lựa chọn giữa các máy 
 
 ---
 
-## 5. Hướng dẫn cập nhật phiên bản
+## 5. Cơ chế Cập nhật qua GitHub Releases
 
-Khi có thay đổi trong mã nguồn:
+Tiện ích tích hợp sẵn cơ chế kiểm tra và cập nhật ứng dụng tự động qua GitHub Releases API:
 
-1. Truy cập chrome://extensions/
-2. Tìm tiện ích YouTube Subtitle Translator và nhấp vào biểu tượng Làm mới (Reload).
-3. Tải lại trang video YouTube đang mở (F5) để nạp mã nguồn mới.
+### 5.1. Tab Cập nhật trong Popup (Trực quan & Thuận tiện)
+- **Kiểm tra tự động:** Mỗi khi mở popup, tiện ích sẽ kết nối tới GitHub Releases API (`https://api.github.com/repos/NgocThachTN/YTSubTranslateExtension/releases/latest`) để so sánh phiên bản đang cài đặt với phiên bản mới nhất trên GitHub.
+- **Thông báo phiên bản mới:** Nếu phát hiện phiên bản mới hơn, tab "Cập nhật" sẽ hiển thị chấm đỏ thông báo và nút **Tải bản mới (.zip)** trực tiếp từ Release Assets.
+- **Xem ghi chú thay đổi (Changelog):** Hiển thị chi tiết nội dung cập nhật, tính năng mới và ngày phát hành của phiên bản.
+- **Quy trình 3 bước cập nhật:**
+  1. Bấm nút **Tải bản mới (.zip)** về máy tính.
+  2. Giải nén file `.zip` và chép đè vào thư mục tiện ích hiện tại.
+  3. Mở `chrome://extensions/` và bấm nút **Tải lại ↻ (Reload)** tại tiện ích.
+
+### 5.2. Cách đóng gói và phát hành (Release) lên GitHub
+
+Dự án cung cấp 2 phương thức phát hành bản mới:
+
+#### Cách 1: Tự động qua GitHub Actions (Khuyên dùng)
+Dự án đã tích hợp sẵn GitHub Actions workflow (`.github/workflows/release.yml`). Khi bạn đẩy tag phiên bản mới lên GitHub:
+```bash
+git tag v1.4.0
+git push origin v1.4.0
+```
+GitHub Actions sẽ tự động:
+- Kiểm tra mã nguồn và chạy Node.js đóng gói.
+- Tạo file nén chuẩn `YTSubTranslateExtension-v1.4.0.zip` (loại bỏ tệp rác, `.git`, `node_modules`).
+- Tự động xuất bản GitHub Release với tag tương ứng kèm tệp `.zip` đính kèm.
+
+#### Cách 2: Đóng gói thủ công bằng kịch bản Node.js
+Nếu muốn đóng gói ngay trên máy tính mà không cần qua CI/CD:
+```bash
+node package-release.js
+```
+Kịch bản sẽ tự động trích xuất phiên bản từ `manifest.json` và tạo tệp `.zip` hoàn chỉnh tại thư mục `dist/` (ví dụ: `dist/YTSubTranslateExtension-v1.4.0.zip`). Bạn chỉ cần mở trang GitHub Releases và tải tệp này lên:
+`https://github.com/NgocThachTN/YTSubTranslateExtension/releases/new`
 
 ---
 
@@ -97,7 +135,7 @@ Khi có thay đổi trong mã nguồn:
 2. Bật nút Phụ đề (CC) trên trình điều khiển của YouTube nếu chưa được bật.
 3. Bản dịch Tiếng Việt sẽ tự động xuất hiện cùng lúc với phụ đề gốc theo đúng giao diện chuẩn của YouTube.
 4. Người dùng có thể nhấp chuột trái và kéo thả trực tiếp khối phụ đề trên màn hình video để thay đổi vị trí theo phương dọc.
-5. Để tùy chỉnh thông số (cỡ chữ, độ mờ nền, đổi dịch vụ dịch thuật), nhấp vào biểu tượng tiện ích trên thanh công cụ của trình duyệt.
+5. Để tùy chỉnh thông số (cỡ chữ, độ mờ nền, đổi dịch vụ dịch thuật, kiểm tra cập nhật), nhấp vào biểu tượng tiện ích trên thanh công cụ của trình duyệt.
 
 ---
 
@@ -105,18 +143,23 @@ Khi có thay đổi trong mã nguồn:
 
 ```text
 YTSubTranslateExtension/
-├── manifest.json         # Tệp khai báo cấu hình Manifest V3
-├── inject.js             # Script chạy trong Main World đánh chặn dữ liệu phụ đề
-├── background.js          # Service Worker xử lý đa dịch vụ và bộ nhớ đệm
-├── content.js             # Engine điều phối hiển thị và xử lý phụ đề tại trang
-├── content.css            # Định dạng kiểu dáng phụ đề chuẩn YouTube
+├── manifest.json              # Tệp khai báo cấu hình Manifest V3
+├── inject.js                  # Script chạy trong Main World đánh chặn dữ liệu phụ đề
+├── background.js               # Service Worker xử lý đa dịch vụ và bộ nhớ đệm
+├── content.js                  # Engine điều phối hiển thị và xử lý phụ đề tại trang
+├── content.css                 # Định dạng kiểu dáng phụ đề chuẩn YouTube
 ├── popup/
-│   ├── popup.html         # Giao diện cài đặt phong cách Better Lyrics
-│   ├── popup.css          # Định dạng giao diện cài đặt
-│   └── popup.js           # Logic xử lý tương tác giao diện cài đặt
-├── icons/                 # Tệp biểu tượng kích thước 16px, 48px, 128px và SVG
-├── generate-icons.js      # Kịch bản Node.js tạo tệp hình ảnh biểu tượng
-└── README.md              # Tài liệu kỹ thuật
+│   ├── popup.html              # Giao diện cài đặt đa tab phong cách Better Lyrics
+│   ├── popup.css               # Định dạng giao diện và các thẻ trạng thái cập nhật
+│   └── popup.js                # Logic tương tác, bộ so sánh semver và kiểm tra cập nhật
+├── .github/
+│   └── workflows/
+│       └── release.yml        # GitHub Actions workflow tự động phát hành release
+├── icons/                      # Tệp biểu tượng kích thước 16px, 48px, 128px và SVG
+├── package-release.js          # Kịch bản Node.js đóng gói bản phát hành (.zip)
+├── generate-icons.js           # Kịch bản Node.js tạo tệp hình ảnh biểu tượng
+├── dist/                       # Thư mục chứa gói zip đã đóng gói
+└── README.md                   # Tài liệu kỹ thuật
 ```
 
 ---

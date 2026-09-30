@@ -15,12 +15,12 @@
         <img src="../icons/icon48.png" alt="YT ViSub Logo" class="brand-logo">
         <div class="brand-info">
           <span class="brand-title">YT ViSub</span>
-          <span class="brand-version">1.2.0</span>
+          <span class="brand-version" id="brand-version">v1.4.0</span>
         </div>
       </div>
       <div class="header-right">
         <!-- Quick Social / Action Links -->
-        <a href="https://github.com" target="_blank" class="icon-link-btn" title="GitHub">
+        <a href="https://github.com/NgocThachTN/YTSubTranslateExtension" target="_blank" class="icon-link-btn" title="GitHub">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
             <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
           </svg>
@@ -44,6 +44,10 @@
       <button type="button" class="tab-btn" data-tab="tab-display">Hiển thị</button>
       <button type="button" class="tab-btn" data-tab="tab-language">Ngôn ngữ</button>
       <button type="button" class="tab-btn" data-tab="tab-advanced">Nâng cao</button>
+      <button type="button" class="tab-btn tab-btn-with-badge" data-tab="tab-update" id="tab-btn-update">
+        Cập nhật
+        <span id="tab-update-dot" class="tab-update-dot" style="display: none;"></span>
+      </button>
     </nav>
 
     <!-- Main Content Area -->
@@ -332,6 +336,34 @@
               </select>
             </div>
 
+            <!-- Row: Phong cách dịch Gemini -->
+            <div class="setting-row">
+              <div class="row-text-group">
+                <span class="row-label">Phong cách dịch Gemini</span>
+                <span class="row-sublabel">Tự nhận diện thể loại bài hát, tin tức hoặc hội thoại</span>
+              </div>
+              <select id="select-gemini-style" class="custom-select">
+                <option value="auto" selected>Tự động nhận diện (Lyrics / Báo chí / Đời thường)</option>
+                <option value="lyrics">Chuyên lời bài hát (Giàu cảm xúc, vần điệu, giữ nốt nhạc ♪)</option>
+                <option value="news">Báo chí & Tài liệu (Trang trọng, khách quan, chuẩn mực)</option>
+                <option value="casual">Hội thoại đời thường & Vlog (Tự nhiên, dí dỏm, xưng hô linh hoạt)</option>
+              </select>
+            </div>
+
+            <!-- Row: Vai vế xưng hô Gemini -->
+            <div class="setting-row">
+              <div class="row-text-group">
+                <span class="row-label">Vai vế xưng hô (Lyrics / Hội thoại)</span>
+                <span class="row-sublabel">Sửa lỗi nhầm "Anh - Em" khi ca sĩ nam hoặc nữ hát</span>
+              </div>
+              <select id="select-gemini-pronoun" class="custom-select">
+                <option value="auto" selected>Tự động theo ca sĩ (Khuyên dùng)</option>
+                <option value="female">Nữ hát / Phụ nữ nói (Xưng Em - Gọi Anh)</option>
+                <option value="male">Nam hát / Đàn ông nói (Xưng Anh - Gọi Em)</option>
+                <option value="neutral">Trữ tình trung tính (Tôi - Bạn / Ta - Người)</option>
+              </select>
+            </div>
+
             <!-- Row: Google Cloud API Key -->
             <div class="setting-row-vertical">
               <div class="row-header-inline">
@@ -358,6 +390,102 @@
                 <span class="stats-dots"></span>
                 <span class="stats-value text-accent">Kích hoạt</span>
               </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: Cập nhật ứng dụng qua GitHub Release -->
+      <div id="tab-update" class="tab-pane">
+        <div class="setting-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <svg class="card-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-5.09L9.2 13.2a1 1 0 0 1-1.41-1.42l3.5-3.5a1 1 0 0 1 1.42 0l3.5 3.5a1 1 0 0 1-1.42 1.42L13 11.41V16.5a1 1 0 0 1-2 0z"/>
+              </svg>
+              <h2 class="card-title">Cập nhật ứng dụng</h2>
+            </div>
+            <p class="card-desc">Kiểm tra phiên bản mới nhất từ GitHub Releases và hướng dẫn nâng cấp.</p>
+          </div>
+
+          <div class="card-body">
+            <!-- Version Comparison Box -->
+            <div class="version-compare-grid">
+              <div class="version-stat-card">
+                <span class="version-stat-label">Phiên bản hiện tại</span>
+                <span class="version-stat-val" id="current-version-display">v1.4.0</span>
+                <span class="version-stat-sub">Đang cài trên máy</span>
+              </div>
+              <div class="version-stat-card">
+                <span class="version-stat-label">Bản phát hành mới nhất</span>
+                <span class="version-stat-val text-accent" id="latest-version-display">---</span>
+                <span class="version-stat-sub" id="latest-release-tag">Chưa kiểm tra</span>
+              </div>
+            </div>
+
+            <!-- Status Banner -->
+            <div id="update-status-banner" class="update-banner info">
+              <span id="update-banner-icon" class="banner-icon">ℹ</span>
+              <span id="update-banner-text" class="banner-text">Bấm nút "Kiểm tra cập nhật" để kết nối GitHub Releases.</span>
+            </div>
+
+            <!-- Action Buttons Row -->
+            <div class="update-actions-row">
+              <button type="button" id="btn-check-update" class="btn-subtle" title="Kiểm tra phiên bản mới trên GitHub">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="margin-right: 5px;">
+                  <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                </svg>
+                Kiểm tra cập nhật
+              </button>
+
+              <a href="#" id="btn-download-update" class="btn-primary-pill" style="display: none; text-decoration: none;" target="_blank">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="margin-right: 5px;">
+                  <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+                </svg>
+                Tải bản mới (.zip)
+              </a>
+
+              <a href="https://github.com/NgocThachTN/YTSubTranslateExtension/releases" id="link-github-releases" target="_blank" class="link-subtle" style="font-size: 11.5px; margin-left: auto;">
+                Xem trên GitHub ↗
+              </a>
+            </div>
+
+            <!-- Release Details Box (Hidden until fetched) -->
+            <div id="release-info-section" class="release-info-section" style="display: none;">
+              <div class="release-header-meta">
+                <span class="release-name-label" id="release-name-title">Chi tiết bản cập nhật</span>
+                <span class="release-date-badge" id="release-date-text"></span>
+              </div>
+              <div class="release-notes-box" id="release-notes-content"></div>
+            </div>
+
+            <!-- Step by Step Update Guide -->
+            <div class="update-guide-card">
+              <span class="guide-title">Hướng dẫn cập nhật tiện ích mở rộng (Unpacked)</span>
+              <div class="guide-steps-list">
+                <div class="guide-step">
+                  <span class="step-num">1</span>
+                  <div class="step-content">Bấm <b>Tải bản mới (.zip)</b> từ bản phát hành GitHub mới nhất về máy tính.</div>
+                </div>
+                <div class="guide-step">
+                  <span class="step-num">2</span>
+                  <div class="step-content">Giải nén file và copy đè toàn bộ file vào thư mục tiện ích hiện tại của bạn.</div>
+                </div>
+                <div class="guide-step">
+                  <span class="step-num">3</span>
+                  <div class="step-content">Mở trang <code>chrome://extensions</code> trên trình duyệt và bấm biểu tượng <b>Tải lại ↻ (Reload)</b> để hoàn tất.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- GitHub Repo Config -->
+            <div class="setting-row-vertical" style="margin-top: 8px;">
+              <div class="row-header-inline">
+                <span class="row-label">Kho lưu trữ GitHub (Repository)</span>
+                <span class="row-sublabel">Định dạng: owner/repository</span>
+              </div>
+              <input type="text" id="input-github-repo" placeholder="NgocThachTN/YTSubTranslateExtension" class="custom-input">
             </div>
 
           </div>

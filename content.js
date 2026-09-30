@@ -27,6 +27,8 @@
     customApiKey: '',
     geminiApiKey: '',
     geminiModel: 'gemini-3.5-flash-lite',
+    geminiStyle: 'auto', // 'auto' | 'lyrics' | 'news' | 'casual'
+    geminiPronounRole: 'auto', // 'auto' | 'female' | 'male' | 'neutral'
   };
 
   // Local synchronous in-memory cache for 0ms lookup
@@ -116,6 +118,116 @@
       return detectedCaptionLang;
     }
     return 'en';
+  }
+
+  /**
+   * Extract video title from YouTube page DOM for contextual translation
+   */
+  function getVideoTitle() {
+    try {
+      const titleElem = document.querySelector('ytd-watch-metadata #title h1 yt-formatted-string') ||
+                        document.querySelector('#title h1 yt-formatted-string') ||
+                        document.querySelector('h1.ytd-video-primary-info-renderer') ||
+                        document.querySelector('.ytp-title-link');
+      if (titleElem && titleElem.textContent) {
+        return titleElem.textContent.trim();
+      }
+      if (document.title) {
+        return document.title.replace(/\s*-\s*YouTube$/i, '').trim();
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  /**
+   * Extract channel or artist name from YouTube page DOM
+   */
+  function getChannelName() {
+    try {
+      const channelElem = document.querySelector('ytd-watch-metadata ytd-channel-name yt-formatted-string a') ||
+                          document.querySelector('ytd-watch-metadata #channel-name a') ||
+                          document.querySelector('#upload-info ytd-channel-name a') ||
+                          document.querySelector('ytd-video-owner-renderer ytd-channel-name a') ||
+                          document.querySelector('#owner #channel-name a');
+      if (channelElem && channelElem.textContent) {
+        return channelElem.textContent.trim();
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  /**
+   * Extract accurate Artist and Song title from YouTube DOM & title structure
+   */
+  function extractArtistAndSong() {
+    let artist = '';
+    let song = '';
+    const rawTitle = getVideoTitle();
+
+    // 1. Check YouTube official music metadata row in description
+    try {
+      const rows = document.querySelectorAll('ytd-metadata-row-renderer');
+      for (const row of rows) {
+        const titleEl = row.querySelector('#title') || row.querySelector('h4');
+        const contentEl = row.querySelector('#content') || row.querySelector('#default-metadata');
+        if (titleEl && contentEl) {
+          const label = titleEl.textContent.trim().toLowerCase();
+          if (label.includes('artist') || label.includes('nghệ sĩ') || label.includes('performer')) {
+            artist = contentEl.textContent.trim();
+            break;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Parse from standard YouTube title format: "Artist - Song" or "Artist – Song"
+    if (!artist && rawTitle) {
+      const clean = rawTitle.replace(/[\(\[\{].*?(official|mv|video|lyrics|audio|visualizer|m\/v).*?[\)\]\}]/gi, '').trim();
+      const match = clean.match(/^([^\-\–\—\|]{2,40})\s*[\-\–\—\|]\s*(.+)$/);
+      if (match) {
+        artist = match[1].trim();
+        song = match[2].trim();
+      }
+    }
+
+    // 3. Fallback to channel name
+    if (!artist) {
+      const ch = getChannelName();
+      if (ch) {
+        artist = ch
+          .replace(/\s*-\s*Topic$/i, '')
+          .replace(/Official(\s*Channel|\s*Artist)?$/i, '')
+          .replace(/\s*VEVO$/i, '')
+          .trim();
+      }
+    }
+
+    return {
+      artist: artist || '',
+      song: song || rawTitle || '',
+      fullTitle: rawTitle || ''
+    };
+  }
+
+  /**
+   * Extract comprehensive video context (Artist, Song, and Title)
+   */
+  function getVideoContext() {
+    const meta = extractArtistAndSong();
+    const parts = [];
+    if (meta.artist) parts.push(`Artist: ${meta.artist}`);
+    if (meta.song && meta.song !== meta.fullTitle) parts.push(`Song: ${meta.song}`);
+    if (meta.fullTitle) parts.push(`Title: ${meta.fullTitle}`);
+    return parts.join(' | ') || meta.fullTitle || '';
+  }
+
+  /**
+   * Standardize cache key across local synchronous cache and pre-translation
+   */
+  function getCacheKey(service, sl, tl, text) {
+    const s = service || 'google';
+    const stylePart = s === 'gemini' ? `:${settings.geminiStyle || 'auto'}:${settings.geminiPronounRole || 'auto'}` : '';
+    return `${s}${stylePart}:${sl || 'auto'}->${tl || 'vi'}:${text}`;
   }
 
   /**
@@ -310,7 +422,7 @@
   /**
    * Fast Google Gemini AI translation (Routed through Background Worker to bypass YouTube CSP)
    */
-  async function fetchGeminiTranslation(text, sourceLang, targetLang, apiKey, signal, model) {
+  async function fetchGeminiTranslation(text, sourceLang, targetLang, apiKey, signal, model, style, pronounRole) {
     if (!apiKey || !apiKey.trim()) throw new Error('Missing Gemini API Key');
     const tl = targetLang || 'vi';
     let chosenModel = model || settings.geminiModel || 'gemini-3.5-flash-lite';
@@ -321,6 +433,9 @@
     } else if (chosenModel.includes('2.0') || chosenModel.includes('1.5')) {
       chosenModel = 'gemini-3.5-flash-lite';
     }
+    const currentVideoContext = getVideoContext();
+    const currentStyle = style || settings.geminiStyle || 'auto';
+    const currentPronoun = pronounRole || settings.geminiPronounRole || 'auto';
 
     // 1. Primary: Route via Background Service Worker (100% immune to YouTube page CSP)
     try {
@@ -333,6 +448,9 @@
           service: 'gemini',
           apiKey: apiKey.trim(),
           model: chosenModel,
+          videoTitle: currentVideoContext,
+          style: currentStyle,
+          pronounRole: currentPronoun,
         }, (res) => {
           if (chrome.runtime.lastError) {
             return reject(new Error(chrome.runtime.lastError.message));
@@ -408,7 +526,9 @@
             tl,
             settings.geminiApiKey,
             signal,
-            settings.geminiModel || 'gemini-3.5-flash-lite'
+            settings.geminiModel || 'gemini-3.5-flash-lite',
+            settings.geminiStyle || 'auto',
+            settings.geminiPronounRole || 'auto'
           );
           if (geminiTrans) {
             return geminiTrans;
@@ -510,7 +630,7 @@
     if (!trimmed) return '';
 
     const service = settings.translationService || 'google';
-    const cacheKey = `${service}:${settings.sourceLang || 'auto'}->${settings.targetLang || 'vi'}:${trimmed}`;
+    const cacheKey = getCacheKey(service, settings.sourceLang, settings.targetLang, trimmed);
 
     // 1. Check local synchronous cache (0ms instant return!)
     if (localCache.has(cacheKey)) {
@@ -539,6 +659,9 @@
           service: service,
           apiKey: effectiveApiKey,
           model: settings.geminiModel || 'gemini-3.5-flash-lite',
+          videoTitle: getVideoContext(),
+          style: settings.geminiStyle || 'auto',
+          pronounRole: settings.geminiPronounRole || 'auto',
         });
 
         if (response && response.success && response.translation) {
@@ -663,7 +786,7 @@
 
     // 1. Check local synchronous cache (0ms instant return - atomic simultaneous display)
     const service = settings.translationService || 'google';
-    const cacheKey = `${service}:${settings.sourceLang || 'auto'}->${settings.targetLang || 'vi'}:${currentText}`;
+    const cacheKey = getCacheKey(service, settings.sourceLang, settings.targetLang, currentText);
     const cached = localCache.get(cacheKey);
 
     if (cached) {
@@ -730,6 +853,7 @@
    * Parse pre-translated JSON3 from YouTube Native Translation (&tlang=)
    */
   function parseYouTubeNativeTranslatedData(data) {
+    if (settings.translationService !== 'youtube') return;
     if (!data || typeof data !== 'string' || !data.trim().startsWith('{')) return;
     try {
       const json = JSON.parse(data);
@@ -742,7 +866,7 @@
           if (e.segs) {
             const translatedText = normalizeText(e.segs.map((s) => s.utf8 || '').join(''));
             if (translatedText && translatedText.length > 1) {
-              localCache.set(`${service}:${sl}->${tl}:${translatedText}`, translatedText);
+              localCache.set(getCacheKey(service, sl, tl, translatedText), translatedText);
             }
           }
         });
@@ -765,9 +889,12 @@
     try {
       if (service === 'gemini' && settings.geminiApiKey) {
         // Batch pre-translation with Gemini AI (15 lines per batch)
+        const currentContext = getVideoContext();
+        const currentStyle = settings.geminiStyle || 'auto';
+        const currentPronoun = settings.geminiPronounRole || 'auto';
         while (pretranslateQueue.length > 0 && settings.translationService === 'gemini') {
           const batch = pretranslateQueue.splice(0, 15);
-          const toTranslate = batch.filter((txt) => !localCache.has(`${service}:${sl}->${tl}:${txt}`));
+          const toTranslate = batch.filter((txt) => !localCache.has(getCacheKey(service, sl, tl, txt)));
           if (toTranslate.length === 0) continue;
 
           try {
@@ -778,13 +905,16 @@
               targetLang: tl,
               apiKey: settings.geminiApiKey,
               model: settings.geminiModel || 'gemini-3.5-flash-lite',
+              videoTitle: currentContext,
+              style: currentStyle,
+              pronounRole: currentPronoun,
             });
 
             if (response && response.success && Array.isArray(response.translations)) {
               toTranslate.forEach((orig, idx) => {
                 const trans = (response.translations[idx] || '').trim();
                 if (trans) {
-                  localCache.set(`${service}:${sl}->${tl}:${orig}`, trans);
+                  localCache.set(getCacheKey(service, sl, tl, orig), trans);
                 }
               });
               console.log(`[YT ViSub] [Gemini Batch] Pre-translated ${toTranslate.length} subtitle lines into cache.`);
@@ -800,7 +930,7 @@
         // Batch pre-translation with Google Translate (25 lines per batch)
         while (pretranslateQueue.length > 0 && settings.translationService === 'google') {
           const batch = pretranslateQueue.splice(0, 25);
-          const toTranslate = batch.filter((txt) => !localCache.has(`${service}:${sl}->${tl}:${txt}`));
+          const toTranslate = batch.filter((txt) => !localCache.has(getCacheKey(service, sl, tl, txt)));
           if (toTranslate.length === 0) continue;
 
           try {
@@ -817,7 +947,7 @@
                 toTranslate.forEach((orig, idx) => {
                   const trans = (translatedLines[idx] || '').trim();
                   if (trans) {
-                    localCache.set(`${service}:${sl}->${tl}:${orig}`, trans);
+                    localCache.set(getCacheKey(service, sl, tl, orig), trans);
                   }
                 });
               }
@@ -938,7 +1068,7 @@
       let serviceOrKeyChanged = false;
       for (const [key, change] of Object.entries(changes)) {
         settings[key] = change.newValue;
-        if (key === 'translationService' || key === 'geminiApiKey' || key === 'geminiModel') {
+        if (key === 'translationService' || key === 'geminiApiKey' || key === 'geminiModel' || key === 'geminiStyle' || key === 'geminiPronounRole') {
           serviceOrKeyChanged = true;
         }
       }

@@ -39,7 +39,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnTestGemini = document.getElementById('btn-test-gemini');
   const geminiStatusBadge = document.getElementById('gemini-status-badge');
   const selectGeminiModel = document.getElementById('select-gemini-model');
+  const selectGeminiStyle = document.getElementById('select-gemini-style');
+  const selectGeminiPronoun = document.getElementById('select-gemini-pronoun');
   const inputApiKey = document.getElementById('input-api-key');
+  const inputGithubRepo = document.getElementById('input-github-repo');
+
+  // Update tab controls
+  const tabUpdateDot = document.getElementById('tab-update-dot');
+  const currentVersionDisplay = document.getElementById('current-version-display');
+  const latestVersionDisplay = document.getElementById('latest-version-display');
+  const latestReleaseTag = document.getElementById('latest-release-tag');
+  const updateStatusBanner = document.getElementById('update-status-banner');
+  const updateBannerIcon = document.getElementById('update-banner-icon');
+  const updateBannerText = document.getElementById('update-banner-text');
+  const btnCheckUpdate = document.getElementById('btn-check-update');
+  const btnDownloadUpdate = document.getElementById('btn-download-update');
+  const linkGithubReleases = document.getElementById('link-github-releases');
+  const releaseInfoSection = document.getElementById('release-info-section');
+  const releaseNameTitle = document.getElementById('release-name-title');
+  const releaseDateText = document.getElementById('release-date-text');
+  const releaseNotesContent = document.getElementById('release-notes-content');
 
   // Preview elements
   const previewSubBox = document.getElementById('preview-sub-box');
@@ -67,6 +86,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     customApiKey: '',
     geminiApiKey: '',
     geminiModel: 'gemini-3.5-flash-lite',
+    geminiStyle: 'auto',
+    geminiPronounRole: 'auto',
+    githubRepo: 'NgocThachTN/YTSubTranslateExtension',
   };
 
   let saveTimeout = null;
@@ -217,7 +239,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Set Advanced controls
       if (inputGeminiKey) inputGeminiKey.value = currentSettings.geminiApiKey || '';
       if (selectGeminiModel) selectGeminiModel.value = currentSettings.geminiModel || 'gemini-3.5-flash-lite';
+      if (selectGeminiStyle) selectGeminiStyle.value = currentSettings.geminiStyle || 'auto';
+      if (selectGeminiPronoun) selectGeminiPronoun.value = currentSettings.geminiPronounRole || 'auto';
       if (inputApiKey) inputApiKey.value = currentSettings.customApiKey || '';
+
+      // Set Update controls
+      if (inputGithubRepo) inputGithubRepo.value = currentSettings.githubRepo || 'NgocThachTN/YTSubTranslateExtension';
 
       updatePreview();
       queryCacheStats();
@@ -353,10 +380,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  if (selectGeminiStyle) {
+    selectGeminiStyle.addEventListener('change', () => {
+      currentSettings.geminiStyle = selectGeminiStyle.value;
+      saveSettings(true);
+    });
+  }
+
+  if (selectGeminiPronoun) {
+    selectGeminiPronoun.addEventListener('change', () => {
+      currentSettings.geminiPronounRole = selectGeminiPronoun.value;
+      saveSettings(true);
+    });
+  }
+
   if (btnTestGemini) {
     btnTestGemini.addEventListener('click', () => {
       const key = (inputGeminiKey ? inputGeminiKey.value : currentSettings.geminiApiKey || '').trim();
       const model = currentSettings.geminiModel || 'gemini-3.5-flash-lite';
+      const style = currentSettings.geminiStyle || 'auto';
+      const pronounRole = currentSettings.geminiPronounRole || 'auto';
       if (!key) {
         if (geminiStatusBadge) {
           geminiStatusBadge.className = 'status-badge error';
@@ -371,7 +414,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       btnTestGemini.disabled = true;
 
-      chrome.runtime.sendMessage({ action: 'TEST_GEMINI_KEY', apiKey: key, model: model }, (res) => {
+      chrome.runtime.sendMessage({
+        action: 'TEST_GEMINI_KEY',
+        apiKey: key,
+        model: model,
+        style: style,
+        pronounRole: pronounRole,
+      }, (res) => {
         btnTestGemini.disabled = false;
         if (!geminiStatusBadge) return;
 
@@ -405,5 +454,162 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  loadSettings();
+  // =========================================================================
+  // GitHub Releases Update Checker
+  // =========================================================================
+
+  const currentAppVersion = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '1.4.0';
+  const brandVersionElem = document.getElementById('brand-version');
+  if (brandVersionElem) brandVersionElem.textContent = `v${currentAppVersion}`;
+  if (currentVersionDisplay) currentVersionDisplay.textContent = `v${currentAppVersion}`;
+
+  /**
+   * Compare two semver version strings (e.g. "v1.4.0" vs "v1.4.1")
+   * Returns: 1 if vA > vB, -1 if vA < vB, 0 if equal
+   */
+  function compareSemver(vA, vB) {
+    const clean = (v) => (v || '').replace(/^[^\d]*/, '').trim();
+    const partsA = clean(vA).split('.').map((n) => parseInt(n, 10) || 0);
+    const partsB = clean(vB).split('.').map((n) => parseInt(n, 10) || 0);
+    const maxLen = Math.max(partsA.length, partsB.length);
+    for (let i = 0; i < maxLen; i++) {
+      const a = partsA[i] || 0;
+      const b = partsB[i] || 0;
+      if (a > b) return 1;
+      if (a < b) return -1;
+    }
+    return 0;
+  }
+
+  /**
+   * Check for latest release on GitHub
+   */
+  async function checkForUpdates(manual = false) {
+    const repo = (currentSettings.githubRepo || 'NgocThachTN/YTSubTranslateExtension').trim();
+    if (!repo) return;
+
+    if (linkGithubReleases) {
+      linkGithubReleases.href = `https://github.com/${repo}/releases`;
+    }
+
+    if (updateStatusBanner) {
+      updateStatusBanner.className = 'update-banner loading';
+      if (updateBannerIcon) updateBannerIcon.textContent = '⏳';
+      if (updateBannerText) updateBannerText.textContent = `Đang kết nối GitHub (${repo})...`;
+    }
+    if (btnCheckUpdate) btnCheckUpdate.disabled = true;
+
+    try {
+      const response = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+        headers: { Accept: 'application/vnd.github.v3+json' },
+      });
+
+      if (response.status === 404) {
+        // No official release published yet
+        if (updateStatusBanner) {
+          updateStatusBanner.className = 'update-banner info';
+          if (updateBannerIcon) updateBannerIcon.textContent = 'ℹ';
+          if (updateBannerText) updateBannerText.textContent = `Chưa có bản phát hành chính thức nào trên GitHub (${repo}). Bạn đang sử dụng bản dev v${currentAppVersion}.`;
+        }
+        if (latestVersionDisplay) latestVersionDisplay.textContent = 'Chưa có';
+        if (latestReleaseTag) latestReleaseTag.textContent = 'No release';
+        if (btnDownloadUpdate) btnDownloadUpdate.style.display = 'none';
+        if (tabUpdateDot) tabUpdateDot.style.display = 'none';
+        if (releaseInfoSection) releaseInfoSection.style.display = 'none';
+        if (manual) showToast('Chưa có bản phát hành mới trên GitHub');
+        return;
+      }
+
+      if (response.status === 403) {
+        if (updateStatusBanner) {
+          updateStatusBanner.className = 'update-banner error';
+          if (updateBannerIcon) updateBannerIcon.textContent = '⚠';
+          if (updateBannerText) updateBannerText.textContent = 'GitHub API bị giới hạn tần suất truy cập tạm thời. Vui lòng bấm "Xem trên GitHub ↗".';
+        }
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const latestTag = data.tag_name || '';
+      const isNewer = compareSemver(latestTag, currentAppVersion) > 0;
+
+      if (latestVersionDisplay) latestVersionDisplay.textContent = latestTag || '---';
+      if (latestReleaseTag) latestReleaseTag.textContent = isNewer ? 'Có bản mới' : 'Mới nhất';
+
+      if (isNewer) {
+        if (updateStatusBanner) {
+          updateStatusBanner.className = 'update-banner update-available';
+          if (updateBannerIcon) updateBannerIcon.textContent = '★';
+          if (updateBannerText) updateBannerText.textContent = `Đã có bản cập nhật mới (${latestTag})! Bấm "Tải bản mới" bên dưới.`;
+        }
+        if (tabUpdateDot) tabUpdateDot.style.display = 'inline-block';
+
+        // Find .zip asset or fallback
+        const zipAsset = (data.assets || []).find((a) => a.name && a.name.endsWith('.zip'));
+        const downloadUrl = zipAsset ? zipAsset.browser_download_url : (data.zipball_url || data.html_url);
+
+        if (btnDownloadUpdate) {
+          btnDownloadUpdate.href = downloadUrl;
+          btnDownloadUpdate.style.display = 'inline-flex';
+        }
+        if (manual) showToast(`Có bản cập nhật mới: ${latestTag}!`);
+      } else {
+        if (updateStatusBanner) {
+          updateStatusBanner.className = 'update-banner success';
+          if (updateBannerIcon) updateBannerIcon.textContent = '✓';
+          if (updateBannerText) updateBannerText.textContent = `Bạn đang sử dụng phiên bản mới nhất (${latestTag || 'v' + currentAppVersion})!`;
+        }
+        if (tabUpdateDot) tabUpdateDot.style.display = 'none';
+        if (btnDownloadUpdate) btnDownloadUpdate.style.display = 'none';
+        if (manual) showToast('Bạn đang dùng bản mới nhất!');
+      }
+
+      // Display release details & changelog
+      if (releaseInfoSection) {
+        releaseInfoSection.style.display = 'flex';
+        if (releaseNameTitle) releaseNameTitle.textContent = data.name || data.tag_name || 'Chi tiết cập nhật';
+        if (releaseDateText && data.published_at) {
+          const d = new Date(data.published_at);
+          releaseDateText.textContent = `Phát hành: ${d.toLocaleDateString('vi-VN')}`;
+        }
+        if (releaseNotesContent) {
+          releaseNotesContent.textContent = data.body || 'Bản phát hành không có ghi chú thay đổi kèm theo.';
+        }
+      }
+
+      if (linkGithubReleases) {
+        linkGithubReleases.href = data.html_url || `https://github.com/${repo}/releases`;
+      }
+    } catch (err) {
+      console.warn('[YT ViSub Update] Check failed:', err);
+      if (updateStatusBanner) {
+        updateStatusBanner.className = 'update-banner error';
+        if (updateBannerIcon) updateBannerIcon.textContent = '⚠';
+        if (updateBannerText) updateBannerText.textContent = `Không thể kết nối đến GitHub: ${err.message || 'Lỗi mạng'}.`;
+      }
+    } finally {
+      if (btnCheckUpdate) btnCheckUpdate.disabled = false;
+    }
+  }
+
+  if (btnCheckUpdate) {
+    btnCheckUpdate.addEventListener('click', () => {
+      checkForUpdates(true);
+    });
+  }
+
+  if (inputGithubRepo) {
+    inputGithubRepo.addEventListener('change', () => {
+      currentSettings.githubRepo = inputGithubRepo.value.trim() || 'NgocThachTN/YTSubTranslateExtension';
+      saveSettings(true);
+      checkForUpdates(false);
+    });
+  }
+
+  await loadSettings();
+  checkForUpdates(false);
 });

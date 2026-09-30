@@ -13,7 +13,8 @@
     "https://clients5.google.com/*",
     "https://api.mymemory.translated.net/*",
     "https://translation.googleapis.com/*",
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.github.com/*"
   ],
   "background": {
     "service_worker": "background.js"
