@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Quota monitor controls
   const statRequestsToday = document.getElementById('stat-requests-today');
+  const statRequestsRemaining = document.getElementById('stat-requests-remaining');
   const statCuesTranslated = document.getElementById('stat-cues-translated');
   const statQuotaSaved = document.getElementById('stat-quota-saved');
   const statPacingSpeed = document.getElementById('stat-pacing-speed');
@@ -474,17 +475,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       const keys = rawKeys.split(/[\n,;]+/).map((k) => k.trim()).filter((k) => k.length > 10);
       const keyCount = Math.max(1, keys.length);
       const maxRpd = keyCount * 1500;
-      const maxRpm = keyCount * 15;
+      const remainingRpd = Math.max(0, maxRpd - requestsToday);
 
-      if (statRequestsToday) statRequestsToday.textContent = `${requestsToday} / ${maxRpd.toLocaleString()}`;
+      if (statRequestsToday) statRequestsToday.textContent = `${requestsToday.toLocaleString()} / ${maxRpd.toLocaleString()}`;
+      if (statRequestsRemaining) statRequestsRemaining.textContent = remainingRpd.toLocaleString();
       if (statCuesTranslated) statCuesTranslated.textContent = cuesTranslated.toLocaleString();
       if (statQuotaSaved) statQuotaSaved.textContent = `${quotaSaved.toLocaleString()} câu`;
       if (statPacingSpeed) statPacingSpeed.textContent = `≤ ${maxRpm} RPM`;
 
       const pct = Math.min(100, Math.round((requestsToday / maxRpd) * 100));
-      if (quotaProgressFill) quotaProgressFill.style.width = `${pct}%`;
+      if (quotaProgressFill) {
+        quotaProgressFill.style.width = `${pct}%`;
+        if (pct >= 90) {
+          quotaProgressFill.style.background = 'linear-gradient(90deg, #f59e0b, #ef4444)';
+        } else {
+          quotaProgressFill.style.background = 'linear-gradient(90deg, #3b82f6, var(--accent-green))';
+        }
+      }
       if (quotaUsagePercent) quotaUsagePercent.textContent = `${pct}%`;
-      if (quotaKeyPool) quotaKeyPool.textContent = keyCount > 1 ? `${keyCount} Keys (${maxRpd.toLocaleString()})` : `1 Key (1.500)`;
+      if (quotaKeyPool) quotaKeyPool.textContent = keyCount > 1 ? `${keyCount} Keys (${maxRpd.toLocaleString()} RPD)` : `1 Key (1.500 RPD)`;
     } catch (_) {}
   }
 

@@ -903,7 +903,7 @@ body::-webkit-scrollbar-thumb {
 }
 
 /* ==========================================================================
-   Gemini Quota & Usage Monitor (3x3 Matrix Grid - Native App Theme)
+   Gemini Quota & Usage Monitor (Horizontal Bar & Matrix Grid - Native App Theme)
    ========================================================================== */
 .row-actions-inline {
   display: flex;
@@ -912,11 +912,113 @@ body::-webkit-scrollbar-thumb {
   flex-shrink: 0;
 }
 
+/* Full-width Horizontal Quota Bar Panel */
+.quota-progress-panel {
+  background-color: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.quota-progress-panel:hover {
+  background-color: var(--bg-hover);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.quota-panel-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.quota-side-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.quota-side-group.text-right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.quota-meta-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-sub);
+}
+
+.quota-meta-val-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.quota-meta-val-row.justify-end {
+  justify-content: flex-end;
+}
+
+.quota-meta-num {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+}
+
+.quota-meta-unit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+.quota-percent-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #3b82f6;
+  background-color: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Horizontal Bar Track & Fill */
+.quota-bar-track {
+  width: 100%;
+  height: 6px;
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 1px 0;
+}
+
+.quota-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #3b82f6, var(--accent-green));
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.35s ease;
+}
+
+.quota-panel-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* 3x2 Matrix Grid */
 .quota-matrix-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .quota-matrix-cell {
@@ -928,7 +1030,7 @@ body::-webkit-scrollbar-thumb {
   flex-direction: column;
   justify-content: space-between;
   gap: 4px;
-  min-height: 66px;
+  min-height: 64px;
   box-sizing: border-box;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
@@ -965,22 +1067,6 @@ body::-webkit-scrollbar-thumb {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.stats-progress-track {
-  width: 100%;
-  height: 4px;
-  background-color: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
-  overflow: hidden;
-  margin: 3px 0 2px;
-}
-
-.stats-progress-bar {
-  height: 100%;
-  border-radius: 2px;
-  background: linear-gradient(90deg, #3b82f6, var(--accent-green));
-  transition: width 0.3s ease;
 }
 
 .status-badge.warning {
