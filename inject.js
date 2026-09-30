@@ -100,30 +100,32 @@
         if (fetchKey === lastFetchedUrl) return;
         lastFetchedUrl = fetchKey;
 
-        // If service is YouTube Native or as secondary fast translation, fetch with &tlang
-        const nativeUrl = target.baseUrl.includes('tlang=')
-          ? target.baseUrl
-          : `${target.baseUrl}&tlang=${encodeURIComponent(currentTargetLang)}&fmt=json3`;
+        // 1. Always proactively fetch original transcript for cluster pre-translation
+        const cleanBaseUrl = target.baseUrl.replace(/[?&]tlang=[^&]*/g, '');
+        const sep = cleanBaseUrl.includes('?') ? '&' : '?';
+        const origUrl = cleanBaseUrl.includes('fmt=json3') ? cleanBaseUrl : `${cleanBaseUrl}${sep}fmt=json3`;
 
-        origFetch(nativeUrl)
-          .then((res) => res.text())
-          .then((text) => {
-            if (text && text.includes('events')) {
-              notifySubtitleData(nativeUrl, text, true, trackLang);
-            } else {
-              // Fallback to original track
-              origFetch(`${target.baseUrl}&fmt=json3`)
-                .then((r) => r.text())
-                .then((origText) => notifySubtitleData(target.baseUrl, origText, false, trackLang))
-                .catch(() => {});
+        origFetch(origUrl)
+          .then((r) => r.text())
+          .then((origText) => {
+            if (origText && (origText.includes('events') || origText.includes('<text'))) {
+              notifySubtitleData(origUrl, origText, false, trackLang);
             }
           })
-          .catch(() => {
-            origFetch(`${target.baseUrl}&fmt=json3`)
-              .then((r) => r.text())
-              .then((origText) => notifySubtitleData(target.baseUrl, origText, false, trackLang))
-              .catch(() => {});
-          });
+          .catch(() => {});
+
+        // 2. If YouTube Native service is chosen, also fetch pre-translated &tlang track
+        if (currentService === 'youtube') {
+          const nativeUrl = `${cleanBaseUrl}${sep}tlang=${encodeURIComponent(currentTargetLang)}&fmt=json3`;
+          origFetch(nativeUrl)
+            .then((res) => res.text())
+            .then((text) => {
+              if (text && text.includes('events')) {
+                notifySubtitleData(nativeUrl, text, true, trackLang);
+              }
+            })
+            .catch(() => {});
+        }
       }
     } catch (e) {}
   }

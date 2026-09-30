@@ -55,6 +55,21 @@
   let pretranslateQueue = [];
   let isPretranslating = false;
   let detectedCaptionLang = '';
+  let videoTimedCues = []; // Chronological list of { startMs, durMs, text }
+  let attachedVideoElement = null;
+
+  /**
+   * Get current video playback time in milliseconds
+   */
+  function getVideoCurrentTimeMs() {
+    try {
+      const video = attachedVideoElement || (playerElement ? playerElement.querySelector('video') : document.querySelector('video'));
+      if (video && !isNaN(video.currentTime)) {
+        return Math.floor(video.currentTime * 1000);
+      }
+    } catch (_) {}
+    return 0;
+  }
 
   /**
    * Normalize string for fast cache keys
@@ -846,7 +861,30 @@
       return;
     }
 
-    // 2. If not cached yet: Fetch translation first, then display BOTH lines together at the exact same moment!
+    // 2. If not cached yet (e.g. at 1s or 5s upon startup or right after seek):
+    // Instantly trigger lookahead cluster pre-translation for upcoming cues!
+    prioritizeUpcomingClusters();
+
+    // 3. Fast Instant Bridge: If service is Gemini AI, display ultra-fast Google translation (50ms)
+    // so the subtitle at 1s, 5s is NEVER delayed or missing while Gemini cluster completes!
+    if (service === 'gemini') {
+      const googleKey = getCacheKey('google', settings.sourceLang, settings.targetLang, currentText);
+      const googleCached = localCache.get(googleKey);
+
+      if (googleCached) {
+        renderSubtitlesSimultaneously(currentText, googleCached);
+      } else {
+        translateWithFreeGoogleEndpoint(currentText, settings.sourceLang, settings.targetLang)
+          .then((quickTrans) => {
+            if (quickTrans && lastCaptionText === currentText && !localCache.has(cacheKey)) {
+              renderSubtitlesSimultaneously(currentText, quickTrans);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+
+    // 4. Fetch primary translation (Gemini AI) and upgrade seamlessly
     const result = await translateTextFast(currentText);
 
     if (result) {
@@ -864,10 +902,11 @@
 
   /**
    * Parse timedtext data (JSON3 or XML) received from inject.js
+   * Returns array of cues: [{ startMs, durMs, text }]
    */
   function parseTimedTextData(data) {
-    const texts = [];
-    if (!data || typeof data !== 'string') return texts;
+    const cues = [];
+    if (!data || typeof data !== 'string') return cues;
 
     if (data.trim().startsWith('{')) {
       try {
@@ -878,27 +917,70 @@
               const text = e.segs.map((s) => s.utf8 || '').join('').trim();
               const cleaned = normalizeText(text);
               if (cleaned && cleaned.length > 1) {
-                texts.push(cleaned);
+                const startMs = typeof e.tStartMs === 'number' ? e.tStartMs : 0;
+                const durMs = typeof e.dDurationMs === 'number' ? e.dDurationMs : 2000;
+                cues.push({ startMs, durMs, text: cleaned });
               }
             }
           });
-          return Array.from(new Set(texts));
         }
       } catch (e) {}
     }
 
-    if (data.includes('<text')) {
-      const regex = /<text\s+start="[^"]*"\s+dur="[^"]*"[^>]*>([\s\S]*?)<\/text>/g;
+    if (cues.length === 0 && data.includes('<text')) {
+      const regex = /<text\s+start="([^"]*)"\s+dur="([^"]*)"[^>]*>([\s\S]*?)<\/text>/g;
       let match;
       while ((match = regex.exec(data)) !== null) {
-        const cleaned = normalizeText(decodeHtmlEntities(match[1].replace(/<[^>]+>/g, '')));
+        const startSec = parseFloat(match[1]) || 0;
+        const durSec = parseFloat(match[2]) || 2;
+        const cleaned = normalizeText(decodeHtmlEntities(match[3].replace(/<[^>]+>/g, '')));
         if (cleaned && cleaned.length > 1) {
-          texts.push(cleaned);
+          cues.push({
+            startMs: Math.floor(startSec * 1000),
+            durMs: Math.floor(durSec * 1000),
+            text: cleaned,
+          });
         }
       }
     }
 
-    return Array.from(new Set(texts));
+    cues.sort((a, b) => a.startMs - b.startMs);
+    return cues;
+  }
+
+  /**
+   * Prioritize upcoming cluster (next 45-60s of video) to the front of pre-translate queue
+   */
+  function prioritizeUpcomingClusters(targetTimeMs = null) {
+    if (!videoTimedCues || videoTimedCues.length === 0) return;
+    const currentMs = targetTimeMs !== null ? targetTimeMs : getVideoCurrentTimeMs();
+
+    const service = settings.translationService || 'google';
+    const sl = settings.sourceLang || 'auto';
+    const tl = settings.targetLang || 'vi';
+
+    // 1. Find upcoming cues in window [currentMs - 2000ms, currentMs + 55000ms]
+    const upcoming = videoTimedCues.filter(c => c.startMs >= Math.max(0, currentMs - 2000) && c.startMs <= currentMs + 55000);
+    const uncachedUpcoming = upcoming
+      .map(c => c.text)
+      .filter(txt => !localCache.has(getCacheKey(service, sl, tl, txt)));
+
+    const uniqueUpcoming = uncachedUpcoming.filter((txt, idx) => uncachedUpcoming.indexOf(txt) === idx);
+
+    if (uniqueUpcoming.length > 0) {
+      // Prepend upcoming cues directly to front of queue
+      pretranslateQueue = uniqueUpcoming.concat(pretranslateQueue.filter(txt => !uniqueUpcoming.includes(txt)));
+    } else if (pretranslateQueue.length === 0) {
+      // Queue remaining cues from current playhead forward, then past cues
+      const forwardCues = videoTimedCues.filter(c => c.startMs > currentMs + 55000);
+      const pastCues = videoTimedCues.filter(c => c.startMs < currentMs - 2000);
+      const reordered = [...forwardCues, ...pastCues]
+        .map(c => c.text)
+        .filter((txt, idx, self) => self.indexOf(txt) === idx && !localCache.has(getCacheKey(service, sl, tl, txt)));
+      pretranslateQueue.push(...reordered);
+    }
+
+    processPretranslationQueue();
   }
 
   /**
@@ -940,7 +1022,7 @@
 
     try {
       if (service === 'gemini' && settings.geminiApiKey) {
-        // Batch pre-translation with Gemini AI (15 lines per batch)
+        // Batch pre-translation with Gemini AI (15 lines per cluster)
         const currentContext = getVideoContext();
         const currentStyle = settings.geminiStyle || 'auto';
         const currentPronoun = settings.geminiPronounRole || 'auto';
@@ -969,17 +1051,18 @@
                   localCache.set(getCacheKey(service, sl, tl, orig), trans);
                 }
               });
-              console.log(`[YT ViSub] [Gemini Batch] Pre-translated ${toTranslate.length} subtitle lines into cache.`);
+              console.log(`[YT ViSub] [Gemini Cluster] Pre-translated ${toTranslate.length} subtitle cues into cache.`);
             }
           } catch (e) {
             console.warn('[YT ViSub] Gemini batch pre-translation failed:', e);
           }
 
-          // Delay 2 seconds between batches to strictly respect Gemini 15 RPM free tier!
-          await new Promise((r) => setTimeout(r, 2000));
+          // Dynamic delay: 1.2s if queue has prioritized upcoming items, 2s if cruising background
+          const delayMs = pretranslateQueue.length > 30 ? 1500 : 2000;
+          await new Promise((r) => setTimeout(r, delayMs));
         }
       } else if (service === 'google') {
-        // Batch pre-translation with Google Translate (25 lines per batch)
+        // Batch pre-translation with Google Translate (25 lines per cluster)
         while (pretranslateQueue.length > 0 && settings.translationService === 'google') {
           const batch = pretranslateQueue.splice(0, 25);
           const toTranslate = batch.filter((txt) => !localCache.has(getCacheKey(service, sl, tl, txt)));
@@ -1027,10 +1110,11 @@
     if (event.data.type === 'TIMEDTEXT_TRANSLATED_RESPONSE') {
       parseYouTubeNativeTranslatedData(event.data.data);
     } else if (event.data.type === 'TIMEDTEXT_RESPONSE') {
-      const texts = parseTimedTextData(event.data.data);
-      if (texts.length > 0) {
-        pretranslateQueue.push(...texts);
-        processPretranslationQueue();
+      const cues = parseTimedTextData(event.data.data);
+      if (cues.length > 0) {
+        videoTimedCues = cues;
+        console.log(`[YT ViSub] Loaded ${cues.length} chronological subtitle cues for cluster pre-translation.`);
+        prioritizeUpcomingClusters();
       }
     }
   });
@@ -1062,6 +1146,14 @@
     onCaptionsChanged();
   }
 
+  function onVideoSeeked() {
+    prioritizeUpcomingClusters();
+  }
+
+  function onVideoPlay() {
+    prioritizeUpcomingClusters();
+  }
+
   /**
    * Initialize player
    */
@@ -1073,6 +1165,15 @@
     setupOverlay(player);
     observeCaptionContainer();
     syncConfigToMainWorld();
+
+    const video = player.querySelector('video');
+    if (video) {
+      attachedVideoElement = video;
+      video.removeEventListener('seeked', onVideoSeeked);
+      video.addEventListener('seeked', onVideoSeeked);
+      video.removeEventListener('play', onVideoPlay);
+      video.addEventListener('play', onVideoPlay);
+    }
     return true;
   }
 
