@@ -710,7 +710,7 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: effectiveGenre === 'news' ? 0.15 : 0.35,
-          maxOutputTokens: 1400
+          maxOutputTokens: 2200
         }
       }),
       keepalive: true

@@ -1244,8 +1244,9 @@
 
           if (settings.translationService !== 'gemini') break;
 
-          // Adaptive batch sizing: 12 lines for urgent immediate cues, 22 lines for background bulk cruise
-          const batchSize = pretranslateQueue.length > 25 ? 22 : 12;
+          // Mega-Batch sizing: If remaining queue has <= 40 cues (e.g. whole song), take all in 1 single request!
+          // Otherwise, pack up to 32 cues per batch to minimize total requests to the absolute minimum!
+          const batchSize = pretranslateQueue.length <= 40 ? pretranslateQueue.length : 32;
           const batch = pretranslateQueue.splice(0, batchSize);
           const toTranslate = batch.filter((txt) => !localCache.has(getCacheKey(service, sl, tl, txt)));
           if (toTranslate.length === 0) continue;
@@ -1375,9 +1376,69 @@
     onCaptionsChanged();
   }
 
+  /**
+   * Express Lane for Seek / Play:
+   * Fast-tracks immediate 8 cues around seek point for ultra-low latency (~300ms)
+   * while removing them from Cruise Lane to avoid duplicate API requests.
+   */
+  async function dispatchExpressCluster(targetTimeMs) {
+    if (!videoTimedCues || videoTimedCues.length === 0) return;
+    const service = settings.translationService || 'google';
+    if (service !== 'gemini' || !settings.geminiApiKey) return;
+
+    const sl = settings.sourceLang || 'auto';
+    const tl = settings.targetLang || 'vi';
+
+    // Immediate 8 cues in [targetTimeMs - 1000ms, targetTimeMs + 25000ms]
+    const urgentCues = videoTimedCues
+      .filter((c) => c.startMs >= Math.max(0, targetTimeMs - 1000) && c.startMs <= targetTimeMs + 25000)
+      .map((c) => c.text)
+      .filter((txt) => !localCache.has(getCacheKey(service, sl, tl, txt)));
+
+    const uniqueUrgent = Array.from(new Set(urgentCues)).slice(0, 8);
+    if (uniqueUrgent.length === 0) return;
+
+    // Remove from background cruise queue to prevent duplicate calls
+    pretranslateQueue = pretranslateQueue.filter((txt) => !uniqueUrgent.includes(txt));
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'TRANSLATE_BATCH_GEMINI',
+        lines: uniqueUrgent,
+        sourceLang: sl,
+        targetLang: tl,
+        apiKey: settings.geminiApiKey,
+        model: settings.geminiModel || 'gemini-3.5-flash-lite',
+        videoTitle: getVideoContext(),
+        style: settings.geminiStyle || 'auto',
+        pronounRole: settings.geminiPronounRole || 'auto',
+      });
+
+      if (response && response.success && Array.isArray(response.translations)) {
+        uniqueUrgent.forEach((orig, idx) => {
+          const trans = (response.translations[idx] || '').trim();
+          if (trans) {
+            localCache.set(getCacheKey(service, sl, tl, orig), trans);
+          }
+        });
+
+        // Upgrade active subtitle if it matches any translated cue
+        const activeText = extractCaptionText();
+        if (activeText && localCache.has(getCacheKey(service, sl, tl, activeText))) {
+          renderSubtitlesSimultaneously(activeText, localCache.get(getCacheKey(service, sl, tl, activeText)));
+        }
+      }
+    } catch (_) {}
+  }
+
   function onVideoSeeked() {
     const currentMs = getVideoCurrentTimeMs();
+
+    // 1. Reorganize full video background queue (Cruise Lane)
     prioritizeUpcomingClusters(currentMs);
+
+    // 2. Dispatch Express Lane for immediate cues at the seek point
+    dispatchExpressCluster(currentMs);
 
     if (!settings.enabled || settings.displayMode === 'off') return;
 
