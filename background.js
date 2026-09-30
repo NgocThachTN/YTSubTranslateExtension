@@ -379,6 +379,62 @@ function anchorRoleFromTranslation(videoTitle, translatedText) {
   }
 }
 
+// Session-level pronoun & relationship summary for Reality Shows, Variety Shows, and Vlogs
+const videoPronounSummary = new Map();
+
+function updatePronounSummaryFromTranslation(videoTitle, translatedBatchText, effectiveGenre) {
+  if (!videoTitle || !translatedBatchText) return;
+  const key = getVideoAnchorKey(videoTitle);
+  if (!key) return;
+
+  const textLower = translatedBatchText.toLowerCase();
+
+  if (effectiveGenre === 'reality_show') {
+    const isJpIdol = /(乃木坂|櫻坂|日向坂|akb48|ske48|nmb48|hkt48|工事中|そこ曲がったら|日向坂で会いましょう|スター誕生|モニタリング|水曜日のダウンタウン|ロンドンハーツ)/i.test(videoTitle);
+    if (isJpIdol) {
+      videoPronounSummary.set(key, 'Idol members address themselves as "em", address MCs as "anh [Tên]". MCs address members as "em / mấy đứa", address viewers as "quý vị / mọi người". Keep lively cute reactions ("Hả?!", "Toang rồi!").');
+      return;
+    }
+
+    const hasAudience = /\b(quý vị|quý khán giả|mọi người|các bạn)\b/.test(textLower);
+    const hasAnhEm = /\b(anh|em|chị)\b/.test(textLower);
+    const hasCauTo = /\b(cậu|tớ|mình)\b/.test(textLower);
+
+    const parts = [];
+    if (hasAudience) {
+      parts.push('Host/Cast addressing audience: "chúng tôi / mình" with "quý vị / mọi người / các bạn"');
+    }
+    if (hasAnhEm) {
+      parts.push('Cast members interacting naturally: "anh / em" and "chị / em"');
+    } else if (hasCauTo) {
+      parts.push('Cast members interacting as peers: "cậu - tớ" and "mình"');
+    }
+    if (parts.length === 0) {
+      parts.push('Natural reality show dialogue: "anh / em", "chị / em", "mọi người", lively witty banter');
+    }
+    parts.push('STRICT BAN on romantic couple pronouns ("anh yêu / em yêu") and robotic "tôi / bạn"');
+
+    videoPronounSummary.set(key, parts.join('; '));
+  } else if (effectiveGenre === 'casual') {
+    const hasMinh = /\b(mình|chúng mình)\b/.test(textLower);
+    const hasCacBan = /\b(các bạn|mọi người)\b/.test(textLower);
+    const hasTo = /\b(tớ|cậu)\b/.test(textLower);
+    const hasAnhEm = /\b(anh|em)\b/.test(textLower);
+
+    let summary = 'Vlogger friendly address: ';
+    if (hasMinh && hasCacBan) {
+      summary += 'Self is "mình", audience is "các bạn / mọi người". Natural, friendly, conversational tone (NEVER use stiff robotic "tôi / bạn").';
+    } else if (hasTo) {
+      summary += 'Self is "tớ", audience is "cậu / mọi người". Friendly peer tone.';
+    } else if (hasAnhEm) {
+      summary += 'Vlogger addresses audience as "các em / mọi người", self is "anh" (or "chị").';
+    } else {
+      summary += 'Self is "mình", audience is "các bạn / mọi người". Keep warm conversational bond.';
+    }
+    videoPronounSummary.set(key, summary);
+  }
+}
+
 /**
  * Sanitize and enforce genre-specific pronoun consistency on translated Vietnamese output
  */
@@ -630,6 +686,17 @@ function buildGeminiBatchSubtitlePrompt(lines, targetName, videoTitle = '', styl
   const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
   const pronounInstruction = targetName === 'Vietnamese' ? getPronounInstruction(effectiveRole, videoTitle, effectiveGenre) : '';
 
+  let summarySection = '';
+  if (effectiveGenre === 'reality_show' || effectiveGenre === 'casual') {
+    const key = getVideoAnchorKey(videoTitle);
+    const establishedSummary = videoPronounSummary.get(key);
+    if (establishedSummary) {
+      summarySection = `\nESTABLISHED PRONOUN & RELATIONSHIP SUMMARY (TÓM TẮT XƯNG HÔ ĐÃ THIẾT LẬP TỪ BATCH TRƯỚC):
+- Relationship Mapping: ${establishedSummary}
+- CRITICAL REQUIREMENT: Maintain this EXACT conversational relationship and pronoun mapping consistently across all lines below!\n`;
+    }
+  }
+
   let previousContextSection = '';
   if (Array.isArray(contextTail) && contextTail.length > 0) {
     const validTails = contextTail.filter((t) => t && t.original && t.translation);
@@ -645,7 +712,7 @@ MANDATORY DIRECTIVE: DO NOT re-translate the previous lines above! Output transl
   }
 
   return `You are a world-class bilingual subtitle translator translating continuous video subtitles:
-${contextLine}${styleInstruction}${pronounInstruction}${previousContextSection}
+${contextLine}${styleInstruction}${pronounInstruction}${summarySection}${previousContextSection}
 Maintain exact line numbering (e.g. "1. <translation>"). Output ONLY the numbered translated lines in ${targetName}. Do NOT include explanations, previous lines, or metadata:
 ${promptLines}`;
 }
@@ -870,6 +937,11 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
   // Anchor role from full batch first so all lines are unified
   if (effectiveGenre === 'lyrics' && rawResults.some(Boolean)) {
     anchorRoleFromTranslation(videoTitle, rawResults.join(' '));
+  }
+
+  // Update pronoun & relationship summary for reality shows and vlogs
+  if ((effectiveGenre === 'reality_show' || effectiveGenre === 'casual') && rawResults.some(Boolean)) {
+    updatePronounSummaryFromTranslation(videoTitle, rawResults.join(' '), effectiveGenre);
   }
 
   // Sanitize every line with videoTitle and the anchored role
