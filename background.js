@@ -753,17 +753,34 @@ function getQuotaDateKey() {
 }
 
 /**
- * Record quota usage in chrome.storage.local
+ * Return stable identifier for API key(s) to track quota per key
  */
-async function recordGeminiQuotaUsage(linesCount = 1) {
+function getApiKeyHash(rawKey) {
+  if (!rawKey) return 'default';
+  const keys = getGeminiApiKeys(rawKey);
+  if (keys.length === 0) return 'default';
+  return keys.map((k) => k.slice(-8)).sort().join('_');
+}
+
+/**
+ * Record quota usage in chrome.storage.local (Both per-key and global)
+ */
+async function recordGeminiQuotaUsage(linesCount = 1, rawKey = '') {
   try {
     const today = getQuotaDateKey(); // Pacific Time 'YYYY-MM-DD'
+    const keyHash = getApiKeyHash(rawKey);
+    const keyUsageKey = `gemini_req_${keyHash}_${today}`;
+
     const data = await chrome.storage.local.get([
+      keyUsageKey,
       'gemini_requests_today',
       'gemini_requests_date',
       'gemini_cues_translated',
       'gemini_quota_saved',
     ]);
+
+    let keyRequestsToday = data[keyUsageKey] || 0;
+    keyRequestsToday += 1;
 
     let requestsToday = data.gemini_requests_today || 0;
     if (data.gemini_requests_date !== today) {
@@ -774,6 +791,7 @@ async function recordGeminiQuotaUsage(linesCount = 1) {
     const cuesTranslated = (data.gemini_cues_translated || 0) + linesCount;
 
     await chrome.storage.local.set({
+      [keyUsageKey]: keyRequestsToday,
       gemini_requests_today: requestsToday,
       gemini_requests_date: today,
       gemini_cues_translated: cuesTranslated,
@@ -801,7 +819,7 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
   if (!effectiveKey) {
     throw new Error('Missing Gemini API Key');
   }
-  recordGeminiQuotaUsage(1);
+  recordGeminiQuotaUsage(1, effectiveKey);
 
   const tl = targetLang || 'vi';
   const targetName = tl === 'vi' ? 'Vietnamese' : tl;
@@ -878,7 +896,7 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
   if (!lines || lines.length === 0) return [];
   const effectiveKey = getNextGeminiApiKey(apiKey);
   if (!effectiveKey) throw new Error('Missing Gemini API Key');
-  recordGeminiQuotaUsage(lines.length);
+  recordGeminiQuotaUsage(lines.length, effectiveKey);
 
   const tl = targetLang || 'vi';
   const targetName = tl === 'vi' ? 'Vietnamese' : tl;
@@ -1108,16 +1126,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
 
       const today = getQuotaDateKey();
+      const keyHash = getApiKeyHash(rawKey);
+      const keyUsageKey = `gemini_req_${keyHash}_${today}`;
       const stats = await chrome.storage.local.get([
+        keyUsageKey,
         'gemini_requests_today',
         'gemini_requests_date',
         'gemini_cues_translated',
         'gemini_quota_saved'
       ]);
 
-      let requestsToday = stats.gemini_requests_today || 0;
-      if (stats.gemini_requests_date !== today) {
-        requestsToday = 0;
+      let requestsToday = stats[keyUsageKey];
+      if (typeof requestsToday !== 'number') {
+        requestsToday = (stats.gemini_requests_date === today) ? (stats.gemini_requests_today || 0) : 0;
       }
 
       try {

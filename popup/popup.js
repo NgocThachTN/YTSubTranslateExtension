@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const quotaStatusBanner = document.getElementById('quota-status-banner');
   const quotaStatusText = document.getElementById('quota-status-text');
   const btnCheckQuota = document.getElementById('btn-check-quota');
+  const btnResetQuota = document.getElementById('btn-reset-quota');
 
   // Update tab controls
   const tabUpdateDot = document.getElementById('tab-update-dot');
@@ -481,33 +482,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   /**
+   * Return stable identifier for API key(s) to track quota per key
+   */
+  function getApiKeyHash(rawKey) {
+    if (!rawKey) return 'default';
+    const keys = (rawKey || '')
+      .split(/[\n,;]+/)
+      .map((k) => k.trim())
+      .filter((k) => k.length > 10);
+    if (keys.length === 0) return 'default';
+    return keys.map((k) => k.slice(-8)).sort().join('_');
+  }
+
+  /**
    * Load and render real-time Gemini Quota & Usage Stats
    */
   async function loadQuotaStats() {
     try {
       updateQuotaCountdown();
       const today = getQuotaDateKey();
+      const rawKeys = (currentSettings.geminiApiKey || '').trim();
+      const keys = rawKeys.split(/[\n,;]+/).map((k) => k.trim()).filter((k) => k.length > 10);
+      const keyCount = Math.max(1, keys.length);
+      const maxRpd = keyCount * 1500;
+      const maxRpm = keyCount * 15;
+
+      const keyHash = getApiKeyHash(rawKeys);
+      const keyUsageKey = `gemini_req_${keyHash}_${today}`;
+
       const data = await chrome.storage.local.get([
+        keyUsageKey,
         'gemini_requests_today',
         'gemini_requests_date',
         'gemini_cues_translated',
         'gemini_quota_saved',
       ]);
 
-      let requestsToday = data.gemini_requests_today || 0;
-      if (data.gemini_requests_date !== today) {
-        requestsToday = 0;
+      let requestsToday = data[keyUsageKey];
+      if (typeof requestsToday !== 'number') {
+        requestsToday = (data.gemini_requests_date === today) ? (data.gemini_requests_today || 0) : 0;
       }
-
-      const cuesTranslated = data.gemini_cues_translated || 0;
-      const quotaSaved = data.gemini_quota_saved || 0;
-
-      // Calculate keys in pool
-      const rawKeys = (currentSettings.geminiApiKey || '').trim();
-      const keys = rawKeys.split(/[\n,;]+/).map((k) => k.trim()).filter((k) => k.length > 10);
-      const keyCount = Math.max(1, keys.length);
-      const maxRpd = keyCount * 1500;
-      const maxRpm = keyCount * 15;
       const remainingRpd = Math.max(0, maxRpd - requestsToday);
 
       if (statRequestsToday) statRequestsToday.textContent = `${requestsToday.toLocaleString()} / ${maxRpd.toLocaleString()}`;
@@ -591,6 +605,23 @@ document.addEventListener('DOMContentLoaded', async () => {
           showToast('Kiểm tra thất bại. Vui lòng kiểm tra lại key.');
         }
       });
+    });
+  }
+
+  if (btnResetQuota) {
+    btnResetQuota.addEventListener('click', async () => {
+      const today = getQuotaDateKey();
+      const rawKeys = (currentSettings.geminiApiKey || '').trim();
+      const keyHash = getApiKeyHash(rawKeys);
+      const keyUsageKey = `gemini_req_${keyHash}_${today}`;
+
+      await chrome.storage.local.set({
+        [keyUsageKey]: 0,
+        gemini_requests_today: 0,
+        gemini_requests_date: today
+      });
+      loadQuotaStats();
+      showToast('Đã đặt lại bộ đếm yêu cầu về 0');
     });
   }
 
