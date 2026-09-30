@@ -493,16 +493,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       const rawKey = (currentSettings.geminiApiKey || '').trim();
       if (!rawKey) {
         if (quotaStatusBanner) {
-          quotaStatusBanner.className = 'quota-badge-status warning';
-          if (quotaStatusText) quotaStatusText.textContent = 'Chưa cấu hình Gemini API Key. Vui lòng nhập key phía trên.';
+          quotaStatusBanner.className = 'status-badge warning';
+          quotaStatusBanner.textContent = 'Chưa cấu hình Gemini API Key. Vui lòng nhập key phía trên.';
         }
         showToast('Chưa nhập Gemini API Key');
         return;
       }
 
       if (quotaStatusBanner) {
-        quotaStatusBanner.className = 'quota-badge-status ready';
-        if (quotaStatusText) quotaStatusText.textContent = 'Đang ping kiểm tra kết nối & hạn ngạch tới Google AI Studio...';
+        quotaStatusBanner.className = 'status-badge loading';
+        quotaStatusBanner.textContent = 'Đang ping kiểm tra kết nối & hạn ngạch tới Google AI Studio...';
       }
       btnCheckQuota.disabled = true;
 
@@ -516,21 +516,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (res && res.success) {
           if (quotaStatusBanner) {
-            quotaStatusBanner.className = 'quota-badge-status ready';
-            if (quotaStatusText) quotaStatusText.textContent = res.message || `Key hoạt động tốt • Ping: ${res.latencyMs}ms • Quota khả dụng`;
+            quotaStatusBanner.className = 'status-badge success';
+            quotaStatusBanner.textContent = res.message || `Key hoạt động tốt • Ping: ${res.latencyMs}ms • Quota khả dụng`;
           }
+          if (quotaStatusText) quotaStatusText.textContent = `Sẵn sàng • Ping: ${res.latencyMs}ms`;
           showToast(`Gemini API sẵn sàng! Ping: ${res.latencyMs}ms`);
         } else if (res && res.status === 'rate_limited') {
           if (quotaStatusBanner) {
-            quotaStatusBanner.className = 'quota-badge-status warning';
-            if (quotaStatusText) quotaStatusText.textContent = res.message || 'Tạm chạm giới hạn 15 RPM. Tự động phục hồi sau ít phút.';
+            quotaStatusBanner.className = 'status-badge warning';
+            quotaStatusBanner.textContent = res.message || 'Tạm chạm giới hạn 15 RPM. Tự động phục hồi sau ít phút.';
           }
+          if (quotaStatusText) quotaStatusText.textContent = 'Tạm chạm giới hạn 15 RPM';
           showToast('Tạm chạm giới hạn 15 RPM');
         } else {
           if (quotaStatusBanner) {
-            quotaStatusBanner.className = 'quota-badge-status error';
-            if (quotaStatusText) quotaStatusText.textContent = `Lỗi Quota / Key: ${res?.error || 'Không thể xác thực key'}`;
+            quotaStatusBanner.className = 'status-badge error';
+            quotaStatusBanner.textContent = `Lỗi Quota / Key: ${res?.error || 'Không thể xác thực key'}`;
           }
+          if (quotaStatusText) quotaStatusText.textContent = 'Lỗi kết nối / Quota';
           showToast('Kiểm tra thất bại. Vui lòng kiểm tra lại key.');
         }
       });
