@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const statPacingSpeed = document.getElementById('stat-pacing-speed');
   const quotaProgressFill = document.getElementById('quota-progress-fill');
   const quotaUsagePercent = document.getElementById('quota-usage-percent');
+  const quotaRemainingPercent = document.getElementById('quota-remaining-percent');
   const quotaKeyPool = document.getElementById('quota-key-pool');
   const quotaStatusBanner = document.getElementById('quota-status-banner');
   const quotaStatusText = document.getElementById('quota-status-text');
@@ -475,6 +476,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const keys = rawKeys.split(/[\n,;]+/).map((k) => k.trim()).filter((k) => k.length > 10);
       const keyCount = Math.max(1, keys.length);
       const maxRpd = keyCount * 1500;
+      const maxRpm = keyCount * 15;
       const remainingRpd = Math.max(0, maxRpd - requestsToday);
 
       if (statRequestsToday) statRequestsToday.textContent = `${requestsToday.toLocaleString()} / ${maxRpd.toLocaleString()}`;
@@ -483,16 +485,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (statQuotaSaved) statQuotaSaved.textContent = `${quotaSaved.toLocaleString()} câu`;
       if (statPacingSpeed) statPacingSpeed.textContent = `≤ ${maxRpm} RPM`;
 
-      const pct = Math.min(100, Math.round((requestsToday / maxRpd) * 100));
+      const usedPct = Math.min(100, Math.round((requestsToday / maxRpd) * 100));
+      const remainingPct = Math.max(0, 100 - usedPct);
+
       if (quotaProgressFill) {
-        quotaProgressFill.style.width = `${pct}%`;
-        if (pct >= 90) {
+        quotaProgressFill.style.width = `${usedPct}%`;
+        if (usedPct >= 90) {
           quotaProgressFill.style.background = 'linear-gradient(90deg, #f59e0b, #ef4444)';
         } else {
           quotaProgressFill.style.background = 'linear-gradient(90deg, #3b82f6, var(--accent-green))';
         }
       }
-      if (quotaUsagePercent) quotaUsagePercent.textContent = `${pct}%`;
+      if (quotaUsagePercent) quotaUsagePercent.textContent = `${usedPct}%`;
+      if (quotaRemainingPercent) {
+        quotaRemainingPercent.textContent = `${remainingPct}%`;
+        if (remainingPct <= 10) {
+          quotaRemainingPercent.className = 'quota-percent-pill danger';
+        } else if (remainingPct <= 25) {
+          quotaRemainingPercent.className = 'quota-percent-pill warning';
+        } else {
+          quotaRemainingPercent.className = 'quota-percent-pill success';
+        }
+      }
       if (quotaKeyPool) quotaKeyPool.textContent = keyCount > 1 ? `${keyCount} Keys (${maxRpd.toLocaleString()} RPD)` : `1 Key (1.500 RPD)`;
     } catch (_) {}
   }

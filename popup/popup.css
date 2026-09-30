@@ -988,6 +988,24 @@ body::-webkit-scrollbar-thumb {
   font-variant-numeric: tabular-nums;
 }
 
+.quota-percent-pill.success {
+  color: var(--accent-green);
+  background-color: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.quota-percent-pill.warning {
+  color: #f59e0b;
+  background-color: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.quota-percent-pill.danger {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
 /* Horizontal Bar Track & Fill */
 .quota-bar-track {
   width: 100%;
