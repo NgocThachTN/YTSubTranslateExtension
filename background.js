@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS = {
   customApiKey: '', // Optional Google Cloud Translation API key
   geminiApiKey: '', // Optional Google Gemini AI API key (free tier)
   geminiModel: 'gemini-3.5-flash-lite', // 'gemini-3.5-flash-lite' | 'gemini-3.5-flash'
+  geminiRpdLimit: 500, // 500 RPD (Google AI Studio Free) | 1500 RPD (Google Cloud Tier 1)
   geminiStyle: 'auto', // 'auto' | 'lyrics' | 'news' | 'casual'
   geminiPronounRole: 'auto', // 'auto' | 'female' | 'male' | 'neutral'
   githubRepo: 'NgocThachTN/YTSubTranslateExtension', // GitHub repository for release updates
@@ -1155,6 +1156,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         const latency = Date.now() - startTime;
 
+        const syncSettings = await chrome.storage.sync.get(['geminiRpdLimit']);
+        const baseRpd = syncSettings.geminiRpdLimit || 500;
+        const keyCount = keys.length || 1;
+        const maxRpd = keyCount * baseRpd;
+        const maxRpm = keyCount * 15;
+
         if (res.ok) {
           sendResponse({
             success: true,
@@ -1163,9 +1170,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             requestsToday,
             cuesTranslated: stats.gemini_cues_translated || 0,
             quotaSaved: stats.gemini_quota_saved || 0,
-            keyCount: keys.length || 1,
-            maxRpd: (keys.length || 1) * 1500,
-            maxRpm: (keys.length || 1) * 15,
+            keyCount,
+            maxRpd,
+            maxRpm,
             message: `Key hoạt động tốt • Ping: ${latency}ms • Quota sẵn sàng`
           });
         } else if (res.status === 429) {
@@ -1176,9 +1183,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             requestsToday,
             cuesTranslated: stats.gemini_cues_translated || 0,
             quotaSaved: stats.gemini_quota_saved || 0,
-            keyCount: keys.length || 1,
-            maxRpd: (keys.length || 1) * 1500,
-            maxRpm: (keys.length || 1) * 15,
+            keyCount,
+            maxRpd,
+            maxRpm,
             message: 'Tạm thời chạm giới hạn 15 RPM • Vui lòng đợi 30s hoặc thêm key phụ'
           });
         } else {

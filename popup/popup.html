@@ -336,6 +336,18 @@
               </select>
             </div>
 
+            <!-- Row: Định mức RPD mỗi Key -->
+            <div class="setting-row">
+              <div class="row-text-group">
+                <span class="row-label">Định mức RPD mỗi Key</span>
+                <span class="row-sublabel">Giới hạn số request/ngày trên Google AI Studio</span>
+              </div>
+              <select id="select-gemini-rpd" class="custom-select">
+                <option value="500" selected>500 RPD (Google AI Studio Free Tier)</option>
+                <option value="1500">1.500 RPD (Google Cloud Tier 1)</option>
+              </select>
+            </div>
+
             <!-- Row: Phong cách dịch Gemini -->
             <div class="setting-row">
               <div class="row-text-group">
@@ -370,7 +382,7 @@
             <div class="setting-row">
               <div class="row-text-group">
                 <span class="row-label">Hạn mức & Quota Gemini AI</span>
-                <span id="quota-status-text" class="row-sublabel">Định mức Free: 15 RPM • 1.500 RPD</span>
+                <span id="quota-status-text" class="row-sublabel">Định mức Free: 15 RPM • 500 RPD</span>
               </div>
               <div class="row-actions-inline">
                 <button type="button" id="btn-reset-quota" class="btn-subtle btn-inline-test" title="Đặt lại bộ đếm yêu cầu của khóa này về 0">Đặt lại</button>
@@ -387,14 +399,14 @@
                 <div class="quota-side-group">
                   <span class="quota-meta-title">Yêu cầu đã dùng</span>
                   <div class="quota-meta-val-row">
-                    <span id="stat-requests-today" class="quota-meta-num">0 / 1.500</span>
+                    <span id="stat-requests-today" class="quota-meta-num">0 / 500</span>
                     <span id="quota-usage-percent" class="quota-percent-pill">0%</span>
                   </div>
                 </div>
                 <div class="quota-side-group text-right">
                   <span class="quota-meta-title">Hạn mức còn lại</span>
                   <div class="quota-meta-val-row justify-end">
-                    <span id="stat-requests-remaining" class="quota-meta-num text-accent">1.500</span>
+                    <span id="stat-requests-remaining" class="quota-meta-num text-accent">500</span>
                     <span class="quota-meta-unit">RPD</span>
                     <span id="quota-remaining-percent" class="quota-percent-pill success">100%</span>
                   </div>
@@ -407,7 +419,7 @@
               </div>
 
               <div class="quota-panel-bottom">
-                <span class="quota-meta-sub">Định mức: 1.500 RPD / Key (Bộ đếm tiện ích)</span>
+                <span class="quota-meta-sub">Định mức: 500 RPD / Key (Bộ đếm tiện ích)</span>
                 <span id="quota-reset-countdown" class="quota-meta-sub quota-countdown-text" title="Thời gian đếm ngược đến lúc Google AI Studio đặt lại hạn ngạch (00:00 PST)">
                   <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" style="vertical-align: -1px; margin-right: 4px; opacity: 0.8;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
                   Đặt lại sau: --h --p
@@ -441,7 +453,7 @@
               <!-- Ô 4: Kho khóa API -->
               <div class="quota-matrix-cell">
                 <span class="cell-label">Kho khóa API</span>
-                <span id="quota-key-pool" class="cell-value">1 Key (1.500 RPD)</span>
+                <span id="quota-key-pool" class="cell-value">1 Key (500 RPD)</span>
                 <span class="cell-hint">Tự động đảo khóa</span>
               </div>
 

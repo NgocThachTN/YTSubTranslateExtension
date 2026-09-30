@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnTestGemini = document.getElementById('btn-test-gemini');
   const geminiStatusBadge = document.getElementById('gemini-status-badge');
   const selectGeminiModel = document.getElementById('select-gemini-model');
+  const selectGeminiRpd = document.getElementById('select-gemini-rpd');
   const selectGeminiStyle = document.getElementById('select-gemini-style');
   const selectGeminiPronoun = document.getElementById('select-gemini-pronoun');
   const inputGithubRepo = document.getElementById('input-github-repo');
@@ -100,6 +101,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     customApiKey: '',
     geminiApiKey: '',
     geminiModel: 'gemini-3.5-flash-lite',
+    geminiRpdLimit: 500,
     geminiStyle: 'auto',
     geminiPronounRole: 'auto',
     githubRepo: 'NgocThachTN/YTSubTranslateExtension',
@@ -253,6 +255,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Set Advanced controls
       if (inputGeminiKey) inputGeminiKey.value = currentSettings.geminiApiKey || '';
       if (selectGeminiModel) selectGeminiModel.value = currentSettings.geminiModel || 'gemini-3.5-flash-lite';
+      if (selectGeminiRpd) selectGeminiRpd.value = String(currentSettings.geminiRpdLimit || 500);
       if (selectGeminiStyle) selectGeminiStyle.value = currentSettings.geminiStyle || 'auto';
       if (selectGeminiPronoun) selectGeminiPronoun.value = currentSettings.geminiPronounRole || 'auto';
 
@@ -396,6 +399,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  if (selectGeminiRpd) {
+    selectGeminiRpd.addEventListener('change', () => {
+      currentSettings.geminiRpdLimit = parseInt(selectGeminiRpd.value, 10) || 500;
+      saveSettings(true);
+      loadQuotaStats();
+    });
+  }
+
   if (selectGeminiStyle) {
     selectGeminiStyle.addEventListener('change', () => {
       currentSettings.geminiStyle = selectGeminiStyle.value;
@@ -504,7 +515,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const rawKeys = (currentSettings.geminiApiKey || '').trim();
       const keys = rawKeys.split(/[\n,;]+/).map((k) => k.trim()).filter((k) => k.length > 10);
       const keyCount = Math.max(1, keys.length);
-      const maxRpd = keyCount * 1500;
+      const baseRpd = currentSettings.geminiRpdLimit || 500;
+      const maxRpd = keyCount * baseRpd;
       const maxRpm = keyCount * 15;
 
       const keyHash = getApiKeyHash(rawKeys);
@@ -552,7 +564,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           quotaRemainingPercent.className = 'quota-percent-pill success';
         }
       }
-      if (quotaKeyPool) quotaKeyPool.textContent = keyCount > 1 ? `${keyCount} Keys (${maxRpd.toLocaleString()} RPD)` : `1 Key (1.500 RPD)`;
+      if (quotaKeyPool) quotaKeyPool.textContent = keyCount > 1 ? `${keyCount} Keys (${maxRpd.toLocaleString()} RPD)` : `1 Key (${maxRpd.toLocaleString()} RPD)`;
+      if (quotaStatusText && (!quotaStatusBanner || !quotaStatusBanner.classList.contains('show'))) {
+        quotaStatusText.textContent = `Định mức: ${maxRpm} RPM • ${maxRpd.toLocaleString()} RPD`;
+      }
     } catch (_) {}
   }
 
