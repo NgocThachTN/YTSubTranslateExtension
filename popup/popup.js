@@ -35,6 +35,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const selectTargetLang = document.getElementById('select-target-lang');
 
   // Advanced tab controls
+  const inputGeminiKey = document.getElementById('input-gemini-key');
+  const btnTestGemini = document.getElementById('btn-test-gemini');
+  const geminiStatusBadge = document.getElementById('gemini-status-badge');
+  const selectGeminiModel = document.getElementById('select-gemini-model');
   const inputApiKey = document.getElementById('input-api-key');
 
   // Preview elements
@@ -61,6 +65,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     subBottomOffset: 0,
     hideOriginalNative: true,
     customApiKey: '',
+    geminiApiKey: '',
+    geminiModel: 'gemini-3.5-flash-lite',
   };
 
   let saveTimeout = null;
@@ -171,6 +177,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         stored.subBottomOffset = 0;
         chrome.storage.sync.set({ subBottomOffset: 0 }).catch(() => {});
       }
+      if (stored.geminiModel && (stored.geminiModel.includes('1.5') || stored.geminiModel.includes('2.0'))) {
+        stored.geminiModel = 'gemini-3.5-flash-lite';
+        chrome.storage.sync.set({ geminiModel: 'gemini-3.5-flash-lite' }).catch(() => {});
+      }
       currentSettings = { ...currentSettings, ...stored };
 
       // Set General controls
@@ -205,6 +215,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (selectTargetLang) selectTargetLang.value = currentSettings.targetLang || 'vi';
 
       // Set Advanced controls
+      if (inputGeminiKey) inputGeminiKey.value = currentSettings.geminiApiKey || '';
+      if (selectGeminiModel) selectGeminiModel.value = currentSettings.geminiModel || 'gemini-3.5-flash-lite';
       if (inputApiKey) inputApiKey.value = currentSettings.customApiKey || '';
 
       updatePreview();
@@ -226,6 +238,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     selectTranslationService.addEventListener('change', () => {
       currentSettings.translationService = selectTranslationService.value;
       saveSettings(true);
+      if (selectTranslationService.value === 'gemini' && !currentSettings.geminiApiKey) {
+        showToast('Vui lòng nhập Gemini API Key trong tab Nâng cao');
+        const advBtn = document.querySelector('.tab-btn[data-tab="tab-advanced"]');
+        if (advBtn) advBtn.click();
+        setTimeout(() => {
+          if (inputGeminiKey) inputGeminiKey.focus();
+        }, 120);
+      }
     });
   }
 
@@ -312,6 +332,57 @@ document.addEventListener('DOMContentLoaded', async () => {
     selectTargetLang.addEventListener('change', () => {
       currentSettings.targetLang = selectTargetLang.value;
       saveSettings(true);
+    });
+  }
+
+  if (inputGeminiKey) {
+    inputGeminiKey.addEventListener('input', () => {
+      currentSettings.geminiApiKey = inputGeminiKey.value.trim();
+      saveSettings(false);
+    });
+    inputGeminiKey.addEventListener('change', () => {
+      currentSettings.geminiApiKey = inputGeminiKey.value.trim();
+      saveSettings(true);
+    });
+  }
+
+  if (selectGeminiModel) {
+    selectGeminiModel.addEventListener('change', () => {
+      currentSettings.geminiModel = selectGeminiModel.value;
+      saveSettings(true);
+    });
+  }
+
+  if (btnTestGemini) {
+    btnTestGemini.addEventListener('click', () => {
+      const key = (inputGeminiKey ? inputGeminiKey.value : currentSettings.geminiApiKey || '').trim();
+      const model = currentSettings.geminiModel || 'gemini-3.5-flash-lite';
+      if (!key) {
+        if (geminiStatusBadge) {
+          geminiStatusBadge.className = 'status-badge error';
+          geminiStatusBadge.textContent = 'Vui lòng dán API Key trước khi kiểm tra.';
+        }
+        return;
+      }
+
+      if (geminiStatusBadge) {
+        geminiStatusBadge.className = 'status-badge loading';
+        geminiStatusBadge.textContent = `Đang kiểm tra kết nối tới Google Gemini (${model})...`;
+      }
+      btnTestGemini.disabled = true;
+
+      chrome.runtime.sendMessage({ action: 'TEST_GEMINI_KEY', apiKey: key, model: model }, (res) => {
+        btnTestGemini.disabled = false;
+        if (!geminiStatusBadge) return;
+
+        if (res && res.success) {
+          geminiStatusBadge.className = 'status-badge success';
+          geminiStatusBadge.textContent = `Kết nối thành công (${res.model || model})! Bản dịch mẫu: "${res.translation}"`;
+        } else {
+          geminiStatusBadge.className = 'status-badge error';
+          geminiStatusBadge.textContent = `Lỗi kết nối: ${res?.error || 'Không thể kết nối đến Gemini API'}`;
+        }
+      });
     });
   }
 

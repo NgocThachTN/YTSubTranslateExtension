@@ -25,14 +25,17 @@
     subBottomOffset: 0, // 0 = automatic responsive elevation above player controls
     hideOriginalNative: true,
     customApiKey: '',
+    geminiApiKey: '',
+    geminiModel: 'gemini-3.5-flash-lite',
   };
 
   // Local synchronous in-memory cache for 0ms lookup
   const localCache = new Map();
   const MAX_LOCAL_CACHE = 5000;
 
-  // Active translation controller to abort stale in-flight requests
+  // Active translation controller and in-flight request deduplication
   let activeAbortController = null;
+  const inFlightTranslations = new Map();
 
   // State variables
   let playerElement = null;
@@ -136,6 +139,11 @@
       if (stored.subBottomOffset === 60) {
         stored.subBottomOffset = 0;
         chrome.storage.sync.set({ subBottomOffset: 0 }).catch(() => {});
+      }
+      // Auto-migrate legacy 1.5/2.0 models to gemini-3.5-flash-lite
+      if (stored.geminiModel && (stored.geminiModel.includes('1.5') || stored.geminiModel.includes('2.0'))) {
+        stored.geminiModel = 'gemini-3.5-flash-lite';
+        chrome.storage.sync.set({ geminiModel: 'gemini-3.5-flash-lite' }).catch(() => {});
       }
       settings = { ...settings, ...stored };
       applySettings();
@@ -300,11 +308,120 @@
   }
 
   /**
-   * Fast direct translation (Google Translate or MyMemory with auto failover)
+   * Fast Google Gemini AI translation (Routed through Background Worker to bypass YouTube CSP)
+   */
+  async function fetchGeminiTranslation(text, sourceLang, targetLang, apiKey, signal, model) {
+    if (!apiKey || !apiKey.trim()) throw new Error('Missing Gemini API Key');
+    const tl = targetLang || 'vi';
+    let chosenModel = model || settings.geminiModel || 'gemini-3.5-flash-lite';
+    if (chosenModel.includes('lite')) {
+      chosenModel = 'gemini-3.5-flash-lite';
+    } else if (chosenModel.includes('3.5')) {
+      chosenModel = 'gemini-3.5-flash';
+    } else if (chosenModel.includes('2.0') || chosenModel.includes('1.5')) {
+      chosenModel = 'gemini-3.5-flash-lite';
+    }
+
+    // 1. Primary: Route via Background Service Worker (100% immune to YouTube page CSP)
+    try {
+      const bgResult = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          action: 'TRANSLATE',
+          text: text,
+          sourceLang: sourceLang || 'auto',
+          targetLang: tl,
+          service: 'gemini',
+          apiKey: apiKey.trim(),
+          model: chosenModel,
+        }, (res) => {
+          if (chrome.runtime.lastError) {
+            return reject(new Error(chrome.runtime.lastError.message));
+          }
+          if (res && res.success && res.translation) {
+            return resolve(res.translation);
+          }
+          reject(new Error(res?.error || 'Gemini returned empty'));
+        });
+      });
+
+      if (bgResult) {
+        return bgResult;
+      }
+    } catch (bgErr) {
+      console.warn('[YT ViSub] [Gemini AI] Background worker error, trying direct fetch...', bgErr.message);
+    }
+
+    // 2. Direct fetch fallback
+    const targetName = tl === 'vi' ? 'Vietnamese' : tl;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(chosenModel)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+    const prompt = `Translate this subtitle line directly to natural, conversational ${targetName}. Keep it concise for video subtitles. Output ONLY the translated text, no quotes, no extra explanations:\n${text}`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 60
+        }
+      }),
+      signal: signal,
+      keepalive: true
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Gemini API HTTP ${res.status}: ${errText}`);
+    }
+
+    const data = await res.json();
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (rawText && typeof rawText === 'string') {
+      const cleaned = rawText
+        .trim()
+        .replace(/^["'“”«»]+|["'“”«»]+$/g, '')
+        .replace(/^(Bản dịch|Translation):\s*/i, '')
+        .trim();
+      if (cleaned) {
+        return decodeHtmlEntities(cleaned);
+      }
+    }
+
+    throw new Error('Invalid response structure from Gemini API');
+  }
+
+  /**
+   * Fast direct translation (Google Translate, MyMemory or Gemini with auto failover)
    */
   async function fetchDirectTranslation(text, sourceLang, targetLang, service, signal) {
     const sl = sourceLang || 'auto';
     const tl = targetLang || 'vi';
+
+    // If Gemini AI engine selected
+    if (service === 'gemini') {
+      if (settings.geminiApiKey) {
+        try {
+          const geminiTrans = await fetchGeminiTranslation(
+            text,
+            sl,
+            tl,
+            settings.geminiApiKey,
+            signal,
+            settings.geminiModel || 'gemini-3.5-flash-lite'
+          );
+          if (geminiTrans) {
+            return geminiTrans;
+          }
+        } catch (err) {
+          if (err.name === 'AbortError' && signal && signal.aborted) {
+            throw err;
+          }
+          console.warn('[YT ViSub] Gemini translation failed, auto-failover to Google Translate...', err);
+        }
+      }
+      // If Gemini key missing or failed, seamlessly fall back to Google Translate!
+    }
 
     // If MyMemory engine selected
     if (service === 'mymemory') {
@@ -386,7 +503,7 @@
   }
 
   /**
-   * High-speed translation with local synchronous cache
+   * High-speed translation with local synchronous cache & request deduplication
    */
   async function translateTextFast(text) {
     const trimmed = normalizeText(text);
@@ -400,59 +517,68 @@
       return localCache.get(cacheKey);
     }
 
-    // 2. Abort any previous pending on-demand translation
-    if (activeAbortController) {
-      activeAbortController.abort();
-    }
-    activeAbortController = new AbortController();
-    const currentSignal = activeAbortController.signal;
-
-    let translated = '';
-
-    // 3. Fast direct fetch
-    if (!settings.customApiKey) {
-      try {
-        translated = await fetchDirectTranslation(
-          trimmed,
-          settings.sourceLang || 'auto',
-          settings.targetLang || 'vi',
-          service,
-          currentSignal
-        );
-      } catch (err) {
-        if (err.name === 'AbortError') {
-          return null;
-        }
-      }
+    // 2. Deduplicate in-flight requests for identical text
+    if (inFlightTranslations.has(cacheKey)) {
+      return inFlightTranslations.get(cacheKey);
     }
 
-    // 4. Background service worker fallback
-    if (!translated) {
+    const promise = (async () => {
+      let translated = '';
+
+      // Direct fetch / background service worker
       try {
+        const effectiveApiKey = service === 'gemini'
+          ? (settings.geminiApiKey || '')
+          : (settings.customApiKey || '');
+
         const response = await chrome.runtime.sendMessage({
           action: 'TRANSLATE',
           text: trimmed,
           sourceLang: settings.sourceLang || 'auto',
           targetLang: settings.targetLang || 'vi',
           service: service,
-          apiKey: settings.customApiKey || '',
+          apiKey: effectiveApiKey,
+          model: settings.geminiModel || 'gemini-3.5-flash-lite',
         });
-        if (response && response.success) {
+
+        if (response && response.success && response.translation) {
           translated = response.translation;
         }
-      } catch (e) {}
-    }
-
-    // 5. Store in local cache (only store genuine non-empty translations)
-    if (translated && translated.trim().toLowerCase() !== trimmed.toLowerCase()) {
-      if (localCache.size >= MAX_LOCAL_CACHE) {
-        const firstKey = localCache.keys().next().value;
-        localCache.delete(firstKey);
+      } catch (err) {
+        console.warn('[YT ViSub] Translation message failed:', err);
       }
-      localCache.set(cacheKey, translated);
-    }
 
-    return translated || '';
+      // If Gemini translation failed or was empty, auto-fallback to Google Translate fast endpoint
+      if (!translated && service === 'gemini') {
+        try {
+          translated = await fetchDirectTranslation(
+            trimmed,
+            settings.sourceLang || 'auto',
+            settings.targetLang || 'vi',
+            'google',
+            null
+          );
+        } catch (_) {}
+      }
+
+      // Store in local cache (only genuine non-empty translations)
+      if (translated && translated.trim().toLowerCase() !== trimmed.toLowerCase()) {
+        if (localCache.size >= MAX_LOCAL_CACHE) {
+          const firstKey = localCache.keys().next().value;
+          localCache.delete(firstKey);
+        }
+        localCache.set(cacheKey, translated);
+      }
+
+      return translated || '';
+    })();
+
+    inFlightTranslations.set(cacheKey, promise);
+    try {
+      return await promise;
+    } finally {
+      inFlightTranslations.delete(cacheKey);
+    }
   }
 
   /**
@@ -479,23 +605,29 @@
   }
 
   /**
-   * Render subtitle lines simultaneously in the exact same DOM frame
+   * Render subtitle lines simultaneously (Guarantees atomic parallel display - song song cùng lúc)
    */
   function renderSubtitlesSimultaneously(origText, transText) {
     if (!innerBox) return;
 
+    if (!transText) {
+      // Never display a half-rendered subtitle without translation
+      innerBox.classList.add('ytsub-hidden');
+      return;
+    }
+
     if (settings.displayMode === 'bilingual') {
-      if (originalTextElement) originalTextElement.textContent = origText;
-      if (origWrapper) origWrapper.style.display = 'block';
+      if (originalTextElement) originalTextElement.textContent = origText || '';
+      if (origWrapper) origWrapper.style.display = origText ? 'block' : 'none';
     } else {
       if (origWrapper) origWrapper.style.display = 'none';
     }
 
     if (translatedTextElement) {
-      translatedTextElement.textContent = transText || '';
+      translatedTextElement.textContent = transText;
     }
     if (transWrapper) {
-      transWrapper.style.display = transText ? 'block' : 'none';
+      transWrapper.style.display = 'block';
     }
 
     innerBox.classList.remove('ytsub-hidden');
@@ -503,7 +635,7 @@
 
   /**
    * Process subtitle updates:
-   * Guarantees that original and translated subtitle appear at the exact same instant.
+   * Guarantees that original and translated subtitle ALWAYS appear at the exact same instant (song song).
    */
   async function onCaptionsChanged() {
     if (!settings.enabled || settings.displayMode === 'off') {
@@ -529,23 +661,29 @@
 
     lastCaptionText = currentText;
 
-    // Check if translation is already in local synchronous cache
+    // 1. Check local synchronous cache (0ms instant return - atomic simultaneous display)
     const service = settings.translationService || 'google';
     const cacheKey = `${service}:${settings.sourceLang || 'auto'}->${settings.targetLang || 'vi'}:${currentText}`;
-    let translated = localCache.get(cacheKey);
+    const cached = localCache.get(cacheKey);
 
-    if (translated) {
-      renderSubtitlesSimultaneously(currentText, translated);
+    if (cached) {
+      renderSubtitlesSimultaneously(currentText, cached);
       return;
     }
 
-    // Fetch translation first, then display both simultaneously
+    // 2. If not cached yet: Fetch translation first, then display BOTH lines together at the exact same moment!
     const result = await translateTextFast(currentText);
 
-    if (currentText === lastCaptionText) {
-      const isDuplicate = result && result.trim().toLowerCase() === currentText.trim().toLowerCase() && detectScriptLanguage(currentText);
-      const safeTrans = isDuplicate ? '' : (result || '');
-      renderSubtitlesSimultaneously(currentText, safeTrans);
+    if (result) {
+      const activeText = extractCaptionText();
+      // Render if still on this caption or if active caption is continuing this phrase
+      if (activeText === currentText || (activeText && activeText.startsWith(currentText)) || currentText === lastCaptionText) {
+        const isDuplicate = result.trim().toLowerCase() === currentText.trim().toLowerCase() && detectScriptLanguage(currentText);
+        const safeTrans = isDuplicate ? '' : result;
+        if (safeTrans) {
+          renderSubtitlesSimultaneously(activeText || currentText, safeTrans);
+        }
+      }
     }
   }
 
@@ -624,36 +762,74 @@
     const sl = settings.sourceLang || 'auto';
     const tl = settings.targetLang || 'vi';
 
-    while (pretranslateQueue.length > 0) {
-      const batch = pretranslateQueue.splice(0, 25);
-      const toTranslate = batch.filter((txt) => !localCache.has(`${service}:${sl}->${tl}:${txt}`));
-      if (toTranslate.length === 0) continue;
+    try {
+      if (service === 'gemini' && settings.geminiApiKey) {
+        // Batch pre-translation with Gemini AI (15 lines per batch)
+        while (pretranslateQueue.length > 0 && settings.translationService === 'gemini') {
+          const batch = pretranslateQueue.splice(0, 15);
+          const toTranslate = batch.filter((txt) => !localCache.has(`${service}:${sl}->${tl}:${txt}`));
+          if (toTranslate.length === 0) continue;
 
-      try {
-        const combinedQuery = toTranslate.join('\n');
-        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(combinedQuery)}`;
-
-        const res = await fetch(url, { keepalive: true });
-        if (res.ok) {
-          const json = await res.json();
-          if (Array.isArray(json) && Array.isArray(json[0])) {
-            const translatedFull = json[0].map((item) => (Array.isArray(item) && item[0] ? item[0] : '')).join('');
-            const translatedLines = decodeHtmlEntities(translatedFull).split('\n');
-
-            toTranslate.forEach((orig, idx) => {
-              const trans = (translatedLines[idx] || '').trim();
-              if (trans) {
-                localCache.set(`${service}:${sl}->${tl}:${orig}`, trans);
-              }
+          try {
+            const response = await chrome.runtime.sendMessage({
+              action: 'TRANSLATE_BATCH_GEMINI',
+              lines: toTranslate,
+              sourceLang: sl,
+              targetLang: tl,
+              apiKey: settings.geminiApiKey,
+              model: settings.geminiModel || 'gemini-3.5-flash-lite',
             });
+
+            if (response && response.success && Array.isArray(response.translations)) {
+              toTranslate.forEach((orig, idx) => {
+                const trans = (response.translations[idx] || '').trim();
+                if (trans) {
+                  localCache.set(`${service}:${sl}->${tl}:${orig}`, trans);
+                }
+              });
+              console.log(`[YT ViSub] [Gemini Batch] Pre-translated ${toTranslate.length} subtitle lines into cache.`);
+            }
+          } catch (e) {
+            console.warn('[YT ViSub] Gemini batch pre-translation failed:', e);
           }
+
+          // Delay 2 seconds between batches to strictly respect Gemini 15 RPM free tier!
+          await new Promise((r) => setTimeout(r, 2000));
         }
-      } catch (e) {}
+      } else if (service === 'google') {
+        // Batch pre-translation with Google Translate (25 lines per batch)
+        while (pretranslateQueue.length > 0 && settings.translationService === 'google') {
+          const batch = pretranslateQueue.splice(0, 25);
+          const toTranslate = batch.filter((txt) => !localCache.has(`${service}:${sl}->${tl}:${txt}`));
+          if (toTranslate.length === 0) continue;
 
-      await new Promise((r) => setTimeout(r, 120));
+          try {
+            const combinedQuery = toTranslate.join('\n');
+            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(combinedQuery)}`;
+
+            const res = await fetch(url, { keepalive: true });
+            if (res.ok) {
+              const json = await res.json();
+              if (Array.isArray(json) && Array.isArray(json[0])) {
+                const translatedFull = json[0].map((item) => (Array.isArray(item) && item[0] ? item[0] : '')).join('');
+                const translatedLines = decodeHtmlEntities(translatedFull).split('\n');
+
+                toTranslate.forEach((orig, idx) => {
+                  const trans = (translatedLines[idx] || '').trim();
+                  if (trans) {
+                    localCache.set(`${service}:${sl}->${tl}:${orig}`, trans);
+                  }
+                });
+              }
+            }
+          } catch (e) {}
+
+          await new Promise((r) => setTimeout(r, 120));
+        }
+      }
+    } finally {
+      isPretranslating = false;
     }
-
-    isPretranslating = false;
   }
 
   /**
@@ -759,13 +935,20 @@
 
   chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'sync' || namespace === 'local') {
+      let serviceOrKeyChanged = false;
       for (const [key, change] of Object.entries(changes)) {
         settings[key] = change.newValue;
+        if (key === 'translationService' || key === 'geminiApiKey' || key === 'geminiModel') {
+          serviceOrKeyChanged = true;
+        }
+      }
+      if (serviceOrKeyChanged) {
+        localCache.clear();
+        console.log('[YT ViSub] Service or key updated. Local cache cleared. Active service:', settings.translationService);
       }
       applySettings();
       syncConfigToMainWorld();
       if (lastCaptionText) {
-        const text = lastCaptionText;
         lastCaptionText = '';
         onCaptionsChanged();
       }

@@ -9,7 +9,7 @@ Tài liệu kỹ thuật và hướng dẫn sử dụng tiện ích mở rộng 
 YT ViSub là tiện ích mở rộng trình duyệt (chuẩn Google Chrome Manifest V3) được thiết kế để tự động biên dịch phụ đề video trên nền tảng YouTube sang Tiếng Việt theo thời gian thực với kiến trúc đa máy chủ dịch thuật miễn phí (Multi-Engine Architecture).
 
 Dự án tập trung vào các tiêu chí kỹ thuật:
-- Đa dạng dịch vụ dịch thuật miễn phí: Tích hợp Google Translate API tốc độ cao, YouTube Native Subtitle Translation (máy chủ dịch phụ đề chính thức của YouTube), MyMemory Translation Memory API, và Google Cloud Translation API.
+- Đa dạng dịch vụ dịch thuật: Tích hợp Google Gemini AI (mô hình ngôn ngữ lớn), YouTube Native Subtitle Translation (máy chủ dịch phụ đề chính thức của YouTube), Google Translate API tốc độ cao, MyMemory Translation Memory API, và Google Cloud Translation API.
 - Hiển thị phụ đề theo đúng quy chuẩn giao diện gốc (Native YouTube Caption Styling): thống nhất trên một khối nền đen mờ bán trong suốt, ôm trọn các dòng phụ đề cân đối, không viền rời rạc.
 - Đồng bộ hiển thị tức thời (Atomic Synchronization): dòng phụ đề gốc và dòng biên dịch Tiếng Việt xuất hiện cùng lúc trong một khung hình duy nhất, triệt tiêu độ trễ giữa hai ngôn ngữ.
 - Giao diện quản trị hiện đại (Better Lyrics Inspired Design): giao diện thẻ chia tab tiện ích, tích hợp bảng đo đạc thông số bộ nhớ đệm và xem trước trực quan.
@@ -28,11 +28,15 @@ Hệ thống cho phép người dùng linh hoạt lựa chọn giữa các máy 
 - Phương thức: Đánh chặn và trích xuất luồng phụ đề gốc thông qua endpoint /api/timedtext của máy chủ YouTube với cờ tham số tlang.
 - Đặc điểm: Được Google và YouTube tối ưu hóa riêng cho cấu trúc phụ đề video, dịch trước toàn bộ transcript của video theo ngữ cảnh xuyên suốt, thời gian phản hồi 0ms tại từng mốc thời gian phát.
 
-### 2.3. MyMemory Translated (Dịch thuật ngữ cảnh tự nhiên)
-- Phương thức: Tích hợp cơ sở dữ liệu bộ nhớ dịch thuật phân tán MyMemory Translated API.
+### 2.3. Google Gemini AI (Biên dịch tự nhiên và ngữ cảnh thông minh)
+- Phương thức: Kết nối trực tiếp tới mô hình ngôn ngữ lớn Google Gemini (mặc định Gemini 3.5 Flash-Lite siêu nhanh, độ trễ cực thấp; hỗ trợ Gemini 3.5 Flash) thông qua API Key miễn phí từ Google AI Studio.
+- Đặc điểm: Thấu hiểu ngữ cảnh video, sắc thái hội thoại, tiếng lóng và đại từ nhân xưng phù hợp phong cách phim ảnh. Tích hợp cơ chế dịch trước theo khối (Batch Pre-translation 15 câu/lần), bộ lọc chống rung câu thoại (Caption Debounce 180ms), hiển thị song ngữ tức thì 0ms, và tự động chuyển đổi dự phòng thông minh (Gemini 3.5 Flash-Lite -> Gemini 3.5 Flash -> Google Translate) khi mất kết nối mạng hoặc chạm giới hạn hạn ngạch.
+
+### 2.4. MyMemory Translated (Dịch thuật ngữ cảnh phân tán)
+- Phương thức: Tích hợp cơ sở dữ liệu bộ nhớ dịch thuật phân tán MyMemory Translated API kết hợp thuật toán tự động nhận diện hệ chữ viết (Script Detection) và chuyển đổi dự phòng.
 - Đặc điểm: Phù hợp với ngôn ngữ hội thoại tự nhiên, lời bài hát và các đoạn đàm thoại đời thường.
 
-### 2.4. Google Cloud Translation API (Tùy chọn nâng cao)
+### 2.5. Google Cloud Translation API (Tùy chọn doanh nghiệp)
 - Phương thức: Kết nối trực tiếp tới Google Cloud Translation API v2 thông qua khóa API Key cá nhân của người dùng.
 
 ---

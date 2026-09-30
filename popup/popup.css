@@ -251,6 +251,69 @@ body::-webkit-scrollbar-thumb {
   color: var(--text-sub);
 }
 
+.link-subtle {
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  transition: opacity 0.15s ease, text-decoration 0.15s ease;
+}
+
+.link-subtle:hover {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+.input-with-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-with-action .custom-input {
+  flex: 1;
+}
+
+.btn-inline-test {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  font-size: 11.5px;
+}
+
+.status-badge {
+  display: none;
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 6px 10px;
+  border-radius: 6px;
+  word-break: break-word;
+}
+
+.status-badge.show {
+  display: block;
+}
+
+.status-badge.success {
+  display: block;
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.status-badge.error {
+  display: block;
+  background-color: rgba(239, 68, 68, 0.12);
+  color: #EF4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.status-badge.loading {
+  display: block;
+  background-color: rgba(59, 130, 246, 0.12);
+  color: #3B82F6;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
 /* Apple-style Toggle Switch */
 .toggle-switch {
   position: relative;

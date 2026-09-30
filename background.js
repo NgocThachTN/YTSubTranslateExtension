@@ -23,6 +23,8 @@ const DEFAULT_SETTINGS = {
   subBottomOffset: 0, // 0 = automatic responsive elevation above player controls
   hideOriginalNative: true, // Hide YouTube's native subtitle render to avoid overlap
   customApiKey: '', // Optional Google Cloud Translation API key
+  geminiApiKey: '', // Optional Google Gemini AI API key (free tier)
+  geminiModel: 'gemini-3.5-flash-lite', // 'gemini-3.5-flash-lite' | 'gemini-3.5-flash'
 };
 
 // Initialize default settings upon installation
@@ -34,6 +36,10 @@ chrome.runtime.onInstalled.addListener(async () => {
       if (existing[key] === undefined) {
         toSet[key] = value;
       }
+    }
+    // Auto-migrate legacy 1.5, 2.0 or undefined models to gemini-3.5-flash-lite
+    if (existing.geminiModel && (existing.geminiModel.includes('1.5') || existing.geminiModel.includes('2.0'))) {
+      toSet.geminiModel = 'gemini-3.5-flash-lite';
     }
     // Migrate legacy default 60 to 0
     if (existing.subBottomOffset === 60) {
@@ -184,9 +190,154 @@ async function translateWithMyMemory(text, sourceLang, targetLang) {
 }
 
 /**
+ * Safely resolve model name to supported Gemini API models
+ */
+function resolveGeminiModel(model) {
+  if (!model) return 'gemini-3.5-flash-lite';
+  if (model.includes('lite')) return 'gemini-3.5-flash-lite';
+  if (model.includes('3.5-flash') || model.includes('3.5')) return 'gemini-3.5-flash';
+  // Map any legacy 2.0 or 1.5 to 3.5-flash-lite
+  if (model.includes('2.0') || model.includes('1.5')) return 'gemini-3.5-flash-lite';
+  return 'gemini-3.5-flash-lite';
+}
+
+/**
+ * Translate single subtitle line using Google Gemini AI API (Fast, low-latency, deterministic)
+ */
+async function translateWithGemini(text, sourceLang, targetLang, apiKey, model = 'gemini-3.5-flash-lite') {
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error('Missing Gemini API Key');
+  }
+  const tl = targetLang || 'vi';
+  const targetName = tl === 'vi' ? 'Vietnamese' : tl;
+  const chosenModel = resolveGeminiModel(model);
+
+  const prompt = `Translate this subtitle line directly to natural, conversational ${targetName}. Keep it concise for video subtitles. Output ONLY the translated text, no quotes, no extra explanations:\n${text}`;
+
+  const callModel = async (modelName) => {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 60
+        }
+      }),
+      keepalive: true
+    });
+  };
+
+  let res = await callModel(chosenModel);
+
+  // If the chosen model returns 404, fallback gracefully to gemini-3.5-flash
+  if (res.status === 404 && chosenModel !== 'gemini-3.5-flash') {
+    console.warn(`[YT Sub Translate] ${chosenModel} not found on this API key, falling back to gemini-3.5-flash...`);
+    res = await callModel('gemini-3.5-flash');
+  }
+
+  if (!res.ok) {
+    let errMessage = `HTTP ${res.status}`;
+    try {
+      const errJson = await res.json();
+      if (errJson?.error?.message) {
+        errMessage = errJson.error.message;
+      }
+    } catch (_) {
+      try {
+        const errText = await res.text();
+        if (errText) errMessage = errText;
+      } catch (__) {}
+    }
+    throw new Error(`Gemini API (${chosenModel}): ${errMessage}`);
+  }
+
+  const data = await res.json();
+  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (rawText && typeof rawText === 'string') {
+    const cleaned = rawText
+      .trim()
+      .replace(/^["'“”«»]+|["'“”«»]+$/g, '')
+      .replace(/^(Bản dịch|Translation):\s*/i, '')
+      .trim();
+    if (cleaned) {
+      return decodeHtmlEntities(cleaned);
+    }
+  }
+
+  throw new Error(`Invalid response structure from Gemini API (${chosenModel})`);
+}
+
+/**
+ * Batch translate multiple subtitle lines in a single Gemini API call (High throughput, 0ms playback)
+ */
+async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, model = 'gemini-3.5-flash-lite') {
+  if (!lines || lines.length === 0) return [];
+  if (!apiKey || !apiKey.trim()) throw new Error('Missing Gemini API Key');
+
+  const tl = targetLang || 'vi';
+  const targetName = tl === 'vi' ? 'Vietnamese' : tl;
+  const chosenModel = resolveGeminiModel(model);
+
+  const promptLines = lines.map((text, idx) => `${idx + 1}. ${text}`).join('\n');
+  const prompt = `Translate these numbered video subtitle lines to natural, conversational ${targetName}. Keep each translation concise and preserve tone and meaning.
+Return ONLY the translated lines with their respective line numbers (e.g. "1. <translation>"). No extra text:
+${promptLines}`;
+
+  const callModel = async (modelName) => {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 1024
+        }
+      }),
+      keepalive: true
+    });
+  };
+
+  let res = await callModel(chosenModel);
+  if (res.status === 404 && chosenModel !== 'gemini-3.5-flash') {
+    res = await callModel('gemini-3.5-flash');
+  }
+
+  if (!res.ok) {
+    let errMessage = `HTTP ${res.status}`;
+    try {
+      const errJson = await res.json();
+      if (errJson?.error?.message) errMessage = errJson.error.message;
+    } catch (_) {}
+    throw new Error(`Gemini Batch API (${chosenModel}): ${errMessage}`);
+  }
+
+  const data = await res.json();
+  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+  const results = new Array(lines.length).fill('');
+  const outputLines = rawText.split('\n');
+  for (const line of outputLines) {
+    const match = line.match(/^\s*(\d+)[\.\:\)]\s*(.*)$/);
+    if (match) {
+      const idx = parseInt(match[1], 10) - 1;
+      if (idx >= 0 && idx < lines.length) {
+        results[idx] = decodeHtmlEntities(match[2].trim());
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
  * Handle translation requests with caching and multi-engine routing
  */
-async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi', service = 'google', apiKey = '' }) {
+async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi', service = 'google', apiKey = '', model = 'gemini-2.0-flash' }) {
   const trimmed = (text || '').trim();
   if (!trimmed) {
     return { success: true, translation: '' };
@@ -206,7 +357,19 @@ async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi',
   try {
     let translated = '';
 
-    if (apiKey && apiKey.trim().length > 0) {
+    if (service === 'gemini') {
+      const gKey = (apiKey || '').trim();
+      if (gKey) {
+        try {
+          translated = await translateWithGemini(trimmed, sourceLang, targetLang, gKey, model);
+        } catch (err) {
+          console.warn('[YT Sub Translate] Gemini API failed, falling back to Google Translate...', err);
+          translated = await translateWithFreeGoogleEndpoint(trimmed, sourceLang, targetLang);
+        }
+      } else {
+        translated = await translateWithFreeGoogleEndpoint(trimmed, sourceLang, targetLang);
+      }
+    } else if (apiKey && apiKey.trim().length > 0) {
       translated = await translateWithGoogleCloudApi(trimmed, sourceLang, targetLang, apiKey.trim());
     } else if (service === 'mymemory') {
       try {
@@ -258,6 +421,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === 'GET_CACHE_STATS') {
     sendResponse({ success: true, size: translationCache.size });
+    return true;
+  }
+
+  if (request.action === 'TRANSLATE_BATCH_GEMINI') {
+    translateBatchWithGemini(
+      request.lines,
+      request.sourceLang || 'auto',
+      request.targetLang || 'vi',
+      request.apiKey,
+      request.model || 'gemini-3.5-flash-lite'
+    )
+      .then((translations) => sendResponse({ success: true, translations }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (request.action === 'TEST_GEMINI_KEY') {
+    const chosenModel = resolveGeminiModel(request.model || 'gemini-3.5-flash-lite');
+    translateWithGemini('Hello, this is a test subtitle from YouTube.', 'en', 'vi', request.apiKey, chosenModel)
+      .then((trans) => sendResponse({ success: true, translation: trans, model: chosenModel }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
     return true;
   }
 
