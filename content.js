@@ -987,10 +987,15 @@
     return cues;
   }
 
+  let lastGeminiBatchTime = 0;
+
   /**
-   * Prioritize upcoming cluster (next 45-60s of video) to the front of pre-translate queue
+   * Schedule intelligent full-video background pre-translation.
+   * Multi-tier priority ensures that the immediate playback cluster is translated first,
+   * while all remaining cues across the entire video (forward & past) continue translating
+   * steadily in the background without stalling, while strictly respecting 15 RPM limits.
    */
-  function prioritizeUpcomingClusters(targetTimeMs = null) {
+  function scheduleFullVideoPretranslation(targetTimeMs = null) {
     if (!videoTimedCues || videoTimedCues.length === 0) return;
     const currentMs = targetTimeMs !== null ? targetTimeMs : getVideoCurrentTimeMs();
 
@@ -998,28 +1003,52 @@
     const sl = settings.sourceLang || 'auto';
     const tl = settings.targetLang || 'vi';
 
-    // 1. Find upcoming cues in window [currentMs - 2000ms, currentMs + 55000ms]
-    const upcoming = videoTimedCues.filter(c => c.startMs >= Math.max(0, currentMs - 2000) && c.startMs <= currentMs + 55000);
-    const uncachedUpcoming = upcoming
-      .map(c => c.text)
-      .filter(txt => !localCache.has(getCacheKey(service, sl, tl, txt)));
+    // 1. Identify all uncached cues across the entire video
+    const uncachedCues = videoTimedCues.filter((c) => {
+      return !localCache.has(getCacheKey(service, sl, tl, c.text));
+    });
 
-    const uniqueUpcoming = uncachedUpcoming.filter((txt, idx) => uncachedUpcoming.indexOf(txt) === idx);
-
-    if (uniqueUpcoming.length > 0) {
-      // Prepend upcoming cues directly to front of queue
-      pretranslateQueue = uniqueUpcoming.concat(pretranslateQueue.filter(txt => !uniqueUpcoming.includes(txt)));
-    } else if (pretranslateQueue.length === 0) {
-      // Queue remaining cues from current playhead forward, then past cues
-      const forwardCues = videoTimedCues.filter(c => c.startMs > currentMs + 55000);
-      const pastCues = videoTimedCues.filter(c => c.startMs < currentMs - 2000);
-      const reordered = [...forwardCues, ...pastCues]
-        .map(c => c.text)
-        .filter((txt, idx, self) => self.indexOf(txt) === idx && !localCache.has(getCacheKey(service, sl, tl, txt)));
-      pretranslateQueue.push(...reordered);
+    if (uncachedCues.length === 0) {
+      pretranslateQueue = [];
+      return;
     }
 
+    // 2. Multi-tier priority ordering:
+    // Tier 1: Immediate upcoming window [currentMs - 2s, currentMs + 60s]
+    // Tier 2: Downstream upcoming [currentMs + 60s -> end of video]
+    // Tier 3: Upstream past cues [0 -> currentMs - 2s] (so seeking backwards is already cached!)
+    const tier1 = [];
+    const tier2 = [];
+    const tier3 = [];
+
+    uncachedCues.forEach((c) => {
+      if (c.startMs >= Math.max(0, currentMs - 2000) && c.startMs <= currentMs + 60000) {
+        tier1.push(c.text);
+      } else if (c.startMs > currentMs + 60000) {
+        tier2.push(c.text);
+      } else {
+        tier3.push(c.text);
+      }
+    });
+
+    // Deduplicate preserving strict priority order
+    const ordered = [...tier1, ...tier2, ...tier3];
+    const uniqueQueue = [];
+    const seen = new Set();
+    for (const txt of ordered) {
+      if (!seen.has(txt)) {
+        seen.add(txt);
+        uniqueQueue.push(txt);
+      }
+    }
+
+    pretranslateQueue = uniqueQueue;
     processPretranslationQueue();
+  }
+
+  // Alias for backward-compatible call sites
+  function prioritizeUpcomingClusters(targetTimeMs = null) {
+    scheduleFullVideoPretranslation(targetTimeMs);
   }
 
   /**
@@ -1049,7 +1078,8 @@
   }
 
   /**
-   * Pre-translate batches of sentences in the background for 0ms playback
+   * Pre-translate batches of sentences steadily in the background across the whole video
+   * Strictly respects rate limits (15 RPM for Gemini free tier) while ensuring full video coverage
    */
   async function processPretranslationQueue() {
     if (isPretranslating || pretranslateQueue.length === 0) return;
@@ -1061,14 +1091,27 @@
 
     try {
       if (service === 'gemini' && settings.geminiApiKey) {
-        // Batch pre-translation with Gemini AI (15 lines per cluster)
+        // High-density batch: 18 lines per request (compact, high-speed, genre-aware)
         const currentContext = getVideoContext();
         const currentStyle = settings.geminiStyle || 'auto';
         const currentPronoun = settings.geminiPronounRole || 'auto';
+
         while (pretranslateQueue.length > 0 && settings.translationService === 'gemini') {
-          const batch = pretranslateQueue.splice(0, 15);
+          // 1. Pacing rate-limiter: Enforce at least 3.8s between Gemini calls to guarantee <= 15 RPM
+          const now = Date.now();
+          const elapsed = now - lastGeminiBatchTime;
+          const minInterval = 3800; // 3.8s guarantees staying strictly under 15 RPM
+          if (elapsed < minInterval && lastGeminiBatchTime > 0) {
+            await new Promise((r) => setTimeout(r, minInterval - elapsed));
+          }
+
+          if (settings.translationService !== 'gemini') break;
+
+          const batch = pretranslateQueue.splice(0, 18);
           const toTranslate = batch.filter((txt) => !localCache.has(getCacheKey(service, sl, tl, txt)));
           if (toTranslate.length === 0) continue;
+
+          lastGeminiBatchTime = Date.now();
 
           try {
             const response = await chrome.runtime.sendMessage({
@@ -1090,18 +1133,19 @@
                   localCache.set(getCacheKey(service, sl, tl, orig), trans);
                 }
               });
-              console.log(`[YT ViSub] [Gemini Cluster] Pre-translated ${toTranslate.length} subtitle cues into cache.`);
+              console.log(`[YT ViSub] [Gemini Full-Video] Translated ${toTranslate.length} cues into cache. Remaining in queue: ${pretranslateQueue.length}`);
+            } else if (response && response.error && response.error.includes('429')) {
+              // Rate limit hit: backoff for 6 seconds, requeue items at front
+              console.warn('[YT ViSub] Gemini rate limit reached (429), pausing background worker for 6s...');
+              pretranslateQueue.unshift(...toTranslate);
+              await new Promise((r) => setTimeout(r, 6000));
             }
           } catch (e) {
             console.warn('[YT ViSub] Gemini batch pre-translation failed:', e);
           }
-
-          // Dynamic delay: 1.2s if queue has prioritized upcoming items, 2s if cruising background
-          const delayMs = pretranslateQueue.length > 30 ? 1500 : 2000;
-          await new Promise((r) => setTimeout(r, delayMs));
         }
       } else if (service === 'google') {
-        // Batch pre-translation with Google Translate (25 lines per cluster)
+        // Batch pre-translation with Google Translate (25 lines per request)
         while (pretranslateQueue.length > 0 && settings.translationService === 'google') {
           const batch = pretranslateQueue.splice(0, 25);
           const toTranslate = batch.filter((txt) => !localCache.has(getCacheKey(service, sl, tl, txt)));
@@ -1128,11 +1172,18 @@
             }
           } catch (e) {}
 
-          await new Promise((r) => setTimeout(r, 120));
+          await new Promise((r) => setTimeout(r, 150));
         }
       }
     } finally {
       isPretranslating = false;
+      // If there are still uncached cues anywhere in the video, resume background cruising
+      if (videoTimedCues && videoTimedCues.length > 0) {
+        const hasUncached = videoTimedCues.some((c) => !localCache.has(getCacheKey(service, sl, tl, c.text)));
+        if (hasUncached && pretranslateQueue.length > 0) {
+          processPretranslationQueue();
+        }
+      }
     }
   }
 
@@ -1262,12 +1313,16 @@
     window.addEventListener('yt-navigate-finish', () => {
       lastCaptionText = '';
       detectedCaptionLang = '';
+      videoTimedCues = [];
+      pretranslateQueue = [];
       setTimeout(() => initPlayer(), 200);
     });
 
     window.addEventListener('spfdone', () => {
       lastCaptionText = '';
       detectedCaptionLang = '';
+      videoTimedCues = [];
+      pretranslateQueue = [];
       setTimeout(() => initPlayer(), 200);
     });
 
