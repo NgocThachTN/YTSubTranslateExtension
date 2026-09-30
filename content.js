@@ -349,8 +349,23 @@
 
     // Parse Artist - Song format if music
     if (genre === 'music' || (!artist && !guest)) {
-      const clean = rawTitle.replace(/[\(\[\{].*?(official|mv|video|lyrics|audio|visualizer|m\/v|ep\.\s*\d+|tập\s*\d+).*?[\)\]\}]/gi, '').trim();
-      const match = clean.match(/^([^\-\–\—\|]{2,40})\s*[\-\–\—\|]\s*(.+)$/);
+      const clean = rawTitle.replace(/[\(\[\{【〔〈《].*?(official|mv|video|lyrics|audio|visualizer|m\/v|ep\.\s*\d+|tập\s*\d+).*?[\)\]\}】〕〉》]/gi, '').trim();
+
+      // 1. Standard delimiters: Artist - Song / Artist | Song / Artist / Song / Artist _ Song
+      let match = clean.match(/^([^\-\–\—\|\/_]{2,45})\s*[\-\–\—\|\/_]\s*(.+)$/);
+
+      // 2. Japanese quotation marks: Artist「Song」 or Artist『Song』
+      if (!match) {
+        const jMatch = clean.match(/^([^\u300C\u300E]{2,40})[\u300C\u300E](.+?)[\u300D\u300F]/);
+        if (jMatch) match = jMatch;
+      }
+
+      // 3. Korean / Quote format: Artist 'Song' or Artist "Song"
+      if (!match) {
+        const qMatch = clean.match(/^([^'"]{2,40})\s*['"](.+?)['"]/);
+        if (qMatch) match = qMatch;
+      }
+
       if (match) {
         if (genre === 'music') {
           if (!artist) artist = match[1].trim();
@@ -361,13 +376,25 @@
       }
     }
 
+    // Clean artist name (strip leading bracket tags, feat, official, alternate script)
+    if (artist) {
+      artist = artist
+        .replace(/^\[.*?\]\s*/, '')
+        .replace(/\(feat\..*?\)/i, '')
+        .replace(/\(ft\..*?\)/i, '')
+        .replace(/\s*\(.*?\)$/, '')
+        .replace(/^(MV|M\/V|Official MV)\s*[-|:]\s*/i, '')
+        .trim();
+    }
+
     // Fallback artist to channel name if music
     if (genre === 'music' && !artist) {
       if (channel) {
         artist = channel
           .replace(/\s*-\s*Topic$/i, '')
-          .replace(/Official(\s*Channel|\s*Artist)?$/i, '')
+          .replace(/Official(\s*Channel|\s*Artist|\s*VEVO)?$/i, '')
           .replace(/\s*VEVO$/i, '')
+          .replace(/\s*Music$/i, '')
           .trim();
       }
     }
@@ -401,11 +428,14 @@
 
   /**
    * Standardize cache key across local synchronous cache and pre-translation
+   * For Gemini AI, cache is scoped to the current video to guarantee 100% pronoun consistency
    */
   function getCacheKey(service, sl, tl, text) {
     const s = service || 'google';
+    const currentVideo = getVideoTitle();
+    const anchorKey = s === 'gemini' && currentVideo ? `:${currentVideo.slice(0, 50).toLowerCase().trim()}` : '';
     const stylePart = s === 'gemini' ? `:${settings.geminiStyle || 'auto'}:${settings.geminiPronounRole || 'auto'}` : '';
-    return `${s}${stylePart}:${sl || 'auto'}->${tl || 'vi'}:${text}`;
+    return `${s}${stylePart}${anchorKey}:${sl || 'auto'}->${tl || 'vi'}:${text}`;
   }
 
   /**

@@ -287,14 +287,32 @@ function extractPrimaryFigure(videoContext = '') {
 function detectFigureGender(videoContext = '') {
   const text = (videoContext || '').toLowerCase();
   const femalePatterns = [
-    /\b(laufey|aimer|yoasobi|zutomayo|yorushika|milet|claris|chappell roan|gracie abrams|sabrina carpenter|olivia dean|beabadoobee|billie eilish|olivia rodrigo|taylor swift|adele|ariana grande|dua lipa|katy perry|rihanna|lady gaga|beyonc[eé]|selena gomez|mariah carey|whitney houston|celine dion|avril lavigne|camila cabello|shakira|sia|lana del rey|halsey|miley cyrus|demi lovato|iu|taeyeon|ros[eé]|jennie|jisoo|lisa|blackpink|twice|aespa|ive|newjeans|le sserafim|red velvet|itzy|gidle|\(g\)i-dle|illit|carly rae jepsen|bebe rexha|ellie goulding|kesha|alessia cara|lorde|anne-marie|madonna|britney spears)\b/i,
-    /\b(ellen|oprah|drew barrymore|kelly clarkson|song ji hyo|jeon so min|thúy ngân|lan ngọc|ninh dương lan ngọc|hari won|lâm vỹ dạ|sam|khả như)\b/i,
-    /\b(vũ cát tường|hoàng thùy linh|min|amee|bích phương|văn mai hương|hiền hồ|tóc tiên|bảo anh|đông nhi|mỹ tâm|hồ ngọc hà|khởi my|phương ly|lyly|tlinh|orange|suni hạ linh|vũ phụng tiên|nguyên hà)\b/i
+    // Global & US-UK Female Artists
+    /\b(laufey|aimer|yoasobi|zutomayo|yorushika|milet|claris|chappell roan|gracie abrams|sabrina carpenter|olivia dean|beabadoobee|billie eilish|olivia rodrigo|taylor swift|adele|ariana grande|dua lipa|katy perry|rihanna|lady gaga|beyonc[eé]|selena gomez|mariah carey|whitney houston|celine dion|avril lavigne|camila cabello|shakira|sia|lana del rey|halsey|miley cyrus|demi lovato|carly rae jepsen|bebe rexha|ellie goulding|kesha|alessia cara|lorde|anne-marie|madonna|britney spears|tate mcrae|sza|doja cat|cardi b|megan thee stallion|renee rapp|madison beer|dove cameron|raye|tinashe|kali uchis|rosal[ií]a|karol g|anitta|clairo|phoebe bridgers|lucy dacus|alicia keys|norah jones|amy winehouse|bjork|florence welch|katseye)\b/i,
+    // Japanese Female Artists & Groups
+    /\b(ado|lisa|reona|ikura|suis|acaね|daoko|chanmina|awich|yama|minami|sayuri|majiko|tuyu|eir aoi|kano|hanatan|nano|utada hikaru|utada|ayumi hamasaki|namie amuro|yui|kana nishino|aimyon|aoi teshima|chihiro onitsuka|mika nakashima|chico with honeyworks|honeyworks|supercell|atashi|clariS|akb48|nogizaka46|sakurazaka46|hinatazaka46|babymetal)\b/i,
+    // Korean Female Artists & Girl Groups
+    /\b(iu|taeyeon|ros[eé]|jennie|jisoo|lisa|blackpink|twice|aespa|ive|newjeans|le sserafim|red velvet|itzy|gidle|\(g\)i-dle|illit|babymonster|nmixx|stayc|kiss of life|meovv|chungha|sunmi|hwasa|lee hi|heize|bol4|davichi|mamamoo|sistar|girls' generation|snsd|kara|2ne1|apink|exid|oh my girl|fromis_9|loona|triples|boa|hyuna|somi|kwon eun bi|yena|chuu)\b/i,
+    // Vietnamese Female Artists & Celebrities
+    /\b(hòa minzy|hoa minzy|trang pháp|mỹ tâm|hồ ngọc hà|đông nhi|bích phương|hoàng thùy linh|min|amee|bảo anh|tóc tiên|hiền hồ|phương ly|lyly|tlinh|orange|suni hạ linh|văn mai hương|phương mỹ chi|vũ cát tường|hà nhi|lâm bảo ngọc|thùy chi|myra trần|uyên linh|lệ quyên|mỹ linh|hồng nhung|trần thu hà|hà trần|hương tràm|khổng tú quỳnh|thanh hà|như quỳnh|phi nhung|cẩm ly|minh tuyết|phương thanh|siu black|đoan trang|bảo thy|thùy lâm|giang hồng ngọc|pháo|marzuz|muộii|hồng thanh|hoàng yến chibi|mie|suboi|vũ phụng tiên|nguyên hà|phùng khánh linh|emily|liz kim cương|han sara|thu phương|lưu hương giang|minh hằng|diệp lâm anh|thúy ngân|lan ngọc|ninh dương lan ngọc|hari won|lâm vỹ dạ|sam|khả như)\b/i,
+    // Chinese / Mandopop Female Artists
+    /\b(đặng tử kỳ|g\.e\.m\.|gem|teresa teng|faye wong|vương phi|jolin tsai|thái y lâm|cyndi wang|vương tâm lăng|angela zhang|trương thiều hàm|fish leong|lương tĩnh như|a-lin|karen mok|mạc văn úy|hebe tien|điền phó chân|s\.h\.e|rainie yang|dương thừa lâm|liu yuxin|lexie liu|curley g)\b/i,
+    // Variety Hosts Female
+    /\b(ellen|oprah|drew barrymore|kelly clarkson|song ji hyo|jeon so min)\b/i
   ];
   const malePatterns = [
-    /\b(keshi|joji|fujii kaze|eve|kenshi yonezu|official hige dandism|king gnu|stephen sanchez|conan gray|jeremy zucker|alec benjamin|ed sheeran|charlie puth|bruno mars|justin bieber|the weeknd|post malone|drake|shawn mendes|sam smith|harry styles|zayn|eminem|maroon 5|coldplay|bts|jungkook|jimin|suga|exo|stray kids|seventeen|bigbang|g-dragon)\b/i,
-    /\b(jimmy fallon|jimmy kimmel|stephen colbert|james corden|graham norton|joe rogan|conan o'brien|seth meyers|gordon ramsay|yoo jae suk|kang ho dong|shin dong yup|kim jong kook|haha|lee kwang soo|ji suk jin|yang se chan|lee soo geun|seo jang hoon|kim hee chul|min kyung hoon)\b/i,
-    /\b(trấn thành|trường giang|đại nghĩa|ngô kiến huy|jun phạm|lê dương bảo lâm|hieuthuhai|cris phan|sơn tùng|soobin|jack|k-icm|erik|đức phúc|noo phước thịnh|hà anh tuấn|vũ\.|hoàng dũng|quân a\.p|trịnh thăng bình|phan mạnh quỳnh|trung quân|bùi anh tuấn|đan trường|tuấn hưng|justatee|rhymastic|đen vâu|đen|b ray|wren evans|mono|grey d|tăng duy tân|lê bảo bình|khắc việt)\b/i
+    // Global & US-UK Male Artists
+    /\b(keshi|joji|stephen sanchez|conan gray|jeremy zucker|alec benjamin|ed sheeran|charlie puth|bruno mars|justin bieber|the weeknd|post malone|drake|shawn mendes|sam smith|harry styles|zayn|eminem|maroon 5|coldplay|benson boone|teddy swims|noah kahan|hozier|luke combs|morgan wallen|zach bryan|jack harlow|kendrick lamar|j\. cole|travis scott|kanye west|tyler, the creator|mac miller|juice wrld|xxxtentacion|lil nas x|bad bunny|peso pluma|david kushner|dean lewis|lewis capaldi|calum scott|james arthur|john legend)\b/i,
+    // Japanese Male Artists & Bands
+    /\b(fujii kaze|kenshi yonezu|vaundy|yuuri|eve|official hige dandism|king gnu|radwimps|back number|mrs\. green apple|asian kung-fu generation|bump of chicken|spyair|one ok rock|tani yuuki|imase|gen hoshino|tk from ling tosite sigure|hitorie|sukima switch|wacci|novelbright)\b/i,
+    // Korean Male Artists & Boy Groups
+    /\b(bts|jungkook|jimin|suga|exo|baekhyun|kai|stray kids|seventeen|bigbang|g-dragon|txt|tomorrow x together|enhypen|riize|zerobaseone|zb1|boynextdoor|tws|ateez|the boyz|treasure|monsta x|nct|nct 127|nct dream|wayv|shinee|taemin|wonho|woodz|crush|dpr ian|dpr live|zion\.t|loco|gray|sik-k|beenzino|epik high)\b/i,
+    // Vietnamese Male Artists
+    /\b(sơn tùng m-tp|sơn tùng|soobin hoàng sơn|soobin|jack|k-icm|erik|đức phúc|noo phước thịnh|hà anh tuấn|vũ\.|vũ|hoàng dũng|quân a\.p|trịnh thăng bình|phan mạnh quỳnh|trung quân|trung quân idol|bùi anh tuấn|quốc thiên|lân nhã|đan trường|tuấn hưng|justatee|rhymastic|đen vâu|đen|b ray|wren evans|mono|grey d|tăng duy tân|lê bảo bình|khắc việt|anh tú|lou hoàng|onlyc|kai đinh|hứa kim tuyền|bùi công nam|phạm hồng phước|nguyễn trần trung quân|bằng kiều|quang dũng|quang lê|trọng tấn|hieuthuhai|hieu thu hai|rhyder|quang hùng masterd|captain boy|wean|hurrykng|pháp kiều|negav|ali hoàng dương|isaac|song luân|gin tuấn kiệt|kay trần|cường seven|s\.t sơn thạch|st sơn thạch|bb trần|duy khánh|cris phan|trấn thành|trường giang|đại nghĩa|ngô kiến huy|jun phạm|lê dương bảo lâm|karik|wowy)\b/i,
+    // Chinese / Mandopop Male Artists
+    /\b(châu kiệt luân|jay chou|jj lin|lâm tuấn kiệt|eason chan|trần dịch tấn|wang leehom|vương lực hoành|joker xue|tiết chi khiêm|eric chou|châu hưng triết|hua chenyu|hoa hoa|hoa thần vũ|lay zhang|trương nghệ hưng|jackson wang|vương gia nhĩ|zhou shen|châu thâm|mayday|ngũ nguyệt thiên)\b/i,
+    // Variety Hosts Male
+    /\b(jimmy fallon|jimmy kimmel|stephen colbert|james corden|graham norton|joe rogan|conan o'brien|seth meyers|gordon ramsay|yoo jae suk|kang ho dong|shin dong yup|kim jong kook|haha|lee kwang soo|ji suk jin|yang se chan|lee soo geun|seo jang hoon|kim hee chul|min kyung hoon)\b/i
   ];
 
   for (const p of femalePatterns) {
@@ -303,6 +321,15 @@ function detectFigureGender(videoContext = '') {
   for (const p of malePatterns) {
     if (p.test(text)) return 'male';
   }
+
+  // Perspective clues in song title if artist not directly matched
+  if (/\b(trái tim anh|anh đau|cho anh|với anh|bên anh|anh nhớ em|anh yêu em|anh xin lỗi|vì anh|anh muốn|chàng trai|chú rể)\b/i.test(text)) {
+    return 'male';
+  }
+  if (/\b(trái tim em|em đau|cho em|với em|bên em|em nhớ anh|em yêu anh|em xin lỗi|vì em|em muốn|cô gái|cô dâu|nàng thơ)\b/i.test(text)) {
+    return 'female';
+  }
+
   return '';
 }
 
@@ -343,8 +370,8 @@ function anchorRoleFromTranslation(videoTitle, translatedText) {
   const key = getVideoAnchorKey(videoTitle);
   if (!key || videoRoleAnchor.has(key)) return;
   const text = (translatedText || '').toLowerCase();
-  const femaleSignals = (text.match(/\b(em|của em|với em|cho em|chính em|bên em)\b/g) || []).length;
-  const maleSignals = (text.match(/\b(anh|của anh|với anh|cho anh|chính anh|bên anh)\b/g) || []).length;
+  const femaleSignals = (text.match(/\b(em|của em|với em|cho em|chính em|bên em|em nhớ anh|em yêu anh|anh ơi)\b/g) || []).length;
+  const maleSignals = (text.match(/\b(anh|của anh|với anh|cho anh|chính anh|bên anh|anh nhớ em|anh yêu em|em ơi)\b/g) || []).length;
   if (femaleSignals > 0 && femaleSignals >= maleSignals) {
     videoRoleAnchor.set(key, 'female');
   } else if (maleSignals > 0 && maleSignals > femaleSignals) {
@@ -355,12 +382,39 @@ function anchorRoleFromTranslation(videoTitle, translatedText) {
 /**
  * Sanitize and enforce genre-specific pronoun consistency on translated Vietnamese output
  */
-function cleanOutputByGenre(text, effectiveGenre, role) {
+function cleanOutputByGenre(text, effectiveGenre, role, videoTitle = '') {
   if (!text || typeof text !== 'string') return text;
   let cleaned = text;
 
+  // Resolve role from session anchor or artist detection if not explicit
+  let effectiveRole = role;
+  const key = getVideoAnchorKey(videoTitle);
+  if ((!effectiveRole || effectiveRole === 'auto') && videoTitle) {
+    if (videoRoleAnchor.has(key)) {
+      effectiveRole = videoRoleAnchor.get(key);
+    } else {
+      const detected = detectFigureGender(videoTitle);
+      if (detected) {
+        effectiveRole = detected;
+        videoRoleAnchor.set(key, detected);
+      }
+    }
+  }
+
+  // If still auto for lyrics, dynamically deduce and anchor from line content
+  if (effectiveGenre === 'lyrics' && (!effectiveRole || effectiveRole === 'auto')) {
+    const textLower = cleaned.toLowerCase();
+    if (/\b(em yêu anh|em nhớ anh|bên anh|anh ơi|cho em|với em)\b/.test(textLower)) {
+      effectiveRole = 'female';
+      if (key) videoRoleAnchor.set(key, 'female');
+    } else if (/\b(anh yêu em|anh nhớ em|bên em|em ơi|cho anh|với anh)\b/.test(textLower)) {
+      effectiveRole = 'male';
+      if (key) videoRoleAnchor.set(key, 'male');
+    }
+  }
+
   if (effectiveGenre === 'lyrics') {
-    if (role === 'female') {
+    if (effectiveRole === 'female') {
       cleaned = cleaned
         .replace(/\bTôi\b/g, 'Em')
         .replace(/\btôi\b/g, 'em')
@@ -369,10 +423,12 @@ function cleanOutputByGenre(text, effectiveGenre, role) {
         .replace(/\bcủa mình\b/gi, 'của em')
         .replace(/\bvới mình\b/gi, 'với em')
         .replace(/\bcho mình\b/gi, 'cho em')
+        .replace(/\bMình\b/g, 'Em')
+        .replace(/\bmình\b/g, 'em')
         .replace(/^(Anh|anh) (nghĩ|thấy|nhớ|muốn|biết|yêu|cần|đang|đã|sẽ|chẳng|không|bước|khóc|mơ|đợi|chờ|lạc lối|cô đơn)\b/g, (m, p1, p2) => {
           return (p1 === 'Anh' ? 'Em' : 'em') + ' ' + p2;
         });
-    } else if (role === 'male') {
+    } else if (effectiveRole === 'male') {
       cleaned = cleaned
         .replace(/\bTôi\b/g, 'Anh')
         .replace(/\btôi\b/g, 'anh')
@@ -381,6 +437,8 @@ function cleanOutputByGenre(text, effectiveGenre, role) {
         .replace(/\bcủa mình\b/gi, 'của anh')
         .replace(/\bvới mình\b/gi, 'với anh')
         .replace(/\bcho mình\b/gi, 'cho anh')
+        .replace(/\bMình\b/g, 'Anh')
+        .replace(/\bmình\b/g, 'anh')
         .replace(/^(Em|em) (nghĩ|thấy|nhớ|muốn|biết|yêu|cần|đang|đã|sẽ|chẳng|không|bước|khóc|mơ|đợi|chờ|lạc lối|cô đơn)\b/g, (m, p1, p2) => {
           return (p1 === 'Em' ? 'Anh' : 'anh') + ' ' + p2;
         });
@@ -474,17 +532,18 @@ function getPronounInstruction(effectiveRole = 'auto', videoTitle = '', effectiv
 - DO NOT MIX PRONOUNS across lines!`;
   }
 
-  // Default: 'auto' with dynamic artist identification
+  // Default: 'auto' with mandatory artist & performer identification
   const parsedArtist = primaryFigure;
-  const artistLookupHint = parsedArtist ? `
-- ARTIST IDENTITY LOOKUP: The singer is identified as "${parsedArtist}". Look up your pre-trained knowledge base to identify whether "${parsedArtist}" is female, male, or a band.` : '';
+  const artistLookupHint = parsedArtist
+    ? `\n- ARTIST IDENTIFICATION: The performer is identified as "${parsedArtist}". Look up your knowledge base to determine whether "${parsedArtist}" is female, male, or a band.`
+    : `\n- ARTIST / CONTEXT IDENTIFICATION: Inspect the Video Metadata / Title to identify the performing artist and their gender/persona.`;
 
-  return `\nCRITICAL PRONOUN DIRECTIVE - ARTIST IDENTIFICATION & SONG CONSISTENCY (ĐỒNG NHẤT NGÔI XƯNG THEO CA SĨ):${artistLookupHint}
-- Infer the singer's gender/role from the artist name or song context and stick to ONE SINGLE perspective 100% consistently across all lines:
-  * If female singer/perspective: Singer is ALWAYS "em", listener is ALWAYS "anh" (or "người"). NEVER switch to "tôi" or "mình" anywhere in the song!
-  * If male singer/perspective: Singer is ALWAYS "anh", listener is ALWAYS "em" (or "người"). NEVER switch to "tôi" or "mình" anywhere in the song!
-  * If rap, band, or philosophical: Singer is ALWAYS "tôi" (or "ta"), listener is ALWAYS "bạn"/"người". NEVER switch to "anh" or "em" anywhere in the song!
-- ABSOLUTE PROHIBITION: DO NOT MIX "tôi", "em", "mình", and "anh" for the same person. The singer's self-reference must be identical in every line!`;
+  return `\nCRITICAL PRONOUN DIRECTIVE - MANDATORY ARTIST CHECK (BẮT BUỘC KIỂM TRA NGHỆ SĨ TRƯỚC KHI DỊCH):${artistLookupHint}
+- Determine the singer's gender/perspective from the artist name or song title BEFORE translating:
+  * Female singer/perspective: Singer is ALWAYS "em" (self), listener is ALWAYS "anh" (or "người"). ABSOLUTE BAN: NEVER use "tôi" or "anh" for a female singer!
+  * Male singer/perspective: Singer is ALWAYS "anh" (self), listener is ALWAYS "em" (or "người"). ABSOLUTE BAN: NEVER use "tôi" or "em" for a male singer!
+  * Band, rap, or philosophical/neutral song: Singer is ALWAYS "tôi" (or "ta"), listener is ALWAYS "bạn" or "người".
+- ABSOLUTE PROHIBITION ON MIXING PRONOUNS: Stick to ONE SINGLE lyrical perspective 100% consistently across EVERY SINGLE LINE of the song. Do not flip between "tôi", "em", and "anh"!`;
 }
 
 /**
@@ -673,10 +732,10 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
       .replace(/^(Bản dịch|Translation):\s*/i, '')
       .trim();
     if (cleaned) {
-      cleaned = cleanOutputByGenre(decodeHtmlEntities(cleaned), effectiveGenre, effectiveRole);
       if (effectiveGenre === 'lyrics') {
         anchorRoleFromTranslation(videoTitle, cleaned);
       }
+      cleaned = cleanOutputByGenre(decodeHtmlEntities(cleaned), effectiveGenre, effectiveRole, videoTitle);
       return cleaned;
     }
   }
@@ -734,33 +793,39 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
   const data = await res.json();
   const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-  const results = new Array(lines.length).fill('');
+  const rawResults = new Array(lines.length).fill('');
   const outputLines = rawText.split('\n');
   for (const line of outputLines) {
     const match = line.match(/^\s*(\d+)[\.\:\)]\s*(.*)$/);
     if (match) {
       const idx = parseInt(match[1], 10) - 1;
       if (idx >= 0 && idx < lines.length) {
-        results[idx] = cleanOutputByGenre(decodeHtmlEntities(match[2].trim()), effectiveGenre, effectiveRole);
+        rawResults[idx] = decodeHtmlEntities(match[2].trim());
       }
     }
   }
 
   // Fallback if numbered format failed
-  if (results.filter(Boolean).length < lines.length / 2) {
+  if (rawResults.filter(Boolean).length < lines.length / 2) {
     const cleanLines = outputLines
       .map(l => l.replace(/^\s*\d+[\.\:\)]\s*/, '').trim())
       .filter(Boolean);
     if (cleanLines.length === lines.length) {
       for (let i = 0; i < lines.length; i++) {
-        results[i] = cleanOutputByGenre(decodeHtmlEntities(cleanLines[i]), effectiveGenre, effectiveRole);
+        rawResults[i] = decodeHtmlEntities(cleanLines[i]);
       }
     }
   }
 
-  if (effectiveGenre === 'lyrics' && results.some(Boolean)) {
-    anchorRoleFromTranslation(videoTitle, results.join(' '));
+  // Anchor role from full batch first so all lines are unified
+  if (effectiveGenre === 'lyrics' && rawResults.some(Boolean)) {
+    anchorRoleFromTranslation(videoTitle, rawResults.join(' '));
   }
+
+  // Sanitize every line with videoTitle and the anchored role
+  const results = rawResults.map((line) => {
+    return line ? cleanOutputByGenre(line, effectiveGenre, effectiveRole, videoTitle) : '';
+  });
 
   return results;
 }
