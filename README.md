@@ -39,8 +39,9 @@ Hệ thống cho phép người dùng linh hoạt lựa chọn giữa các máy 
     - Kết hợp từ điển nhận diện nghệ sĩ mở rộng (US-UK, K-Pop, J-Pop, V-Pop, Indie) và cơ chế tra cứu tri thức trực tiếp của Gemini để xác định giới tính ca sĩ (ví dụ: Laufey, Aimer, Taylor Swift là Nữ -> xưng "Em - Anh"; Keshi, Joji, Fujii Kaze là Nam -> xưng "Anh - Em").
     - Triệt tiêu hoàn toàn hiện tượng nhảy ngôi xưng hỗn loạn (*lúc tôi, lúc mình, lúc em/anh*) bằng quy tắc cấm dùng đại từ lệch pha xuyên suốt toàn bộ bài hát.
     - Hỗ trợ bộ chọn chủ động trong cài đặt (`Tự động theo ca sĩ`, `Nữ hát: Em - Anh`, `Nam hát: Anh - Em`, `Trung tính: Tôi - Bạn`).
-  - **Tự động nhận diện (Auto-detect):** Dựa vào tiêu đề video và tín hiệu phụ đề để tự động chuyển phong cách dịch tối ưu mà người dùng không cần thao tác thủ công.
-- Cơ chế hiệu năng cao: Tích hợp cơ chế dịch trước theo khối (Batch Pre-translation 15 câu/lần), bộ lọc chống rung câu thoại, hiển thị song ngữ tức thì 0ms, và tự động chuyển đổi dự phòng thông minh (Gemini 3.5 Flash-Lite -> Gemini 3.5 Flash -> Google Translate) khi mất kết nối mạng hoặc chạm giới hạn hạn ngạch.
+- Cơ chế hiệu năng cao & Tiết kiệm hạn ngạch thông minh:
+  - Tích hợp cơ chế dịch trước theo khối (Batch Pre-translation 15-32 câu/lần), bộ lọc chống rung câu thoại, hiển thị song ngữ tức thì 0ms, và tự động chuyển đổi dự phòng thông minh (Gemini 3.5 Flash-Lite -> Gemini 3.5 Flash -> Google Translate) khi mất kết nối mạng hoặc chạm giới hạn hạn ngạch.
+  - **Tự động bảo vệ Quota & Chống spam request:** Khi phát hiện phụ đề YouTube đang được dịch bằng phụ đề tự động (YouTube Native Auto-translate `&tlang=`) hoặc phụ đề tạo tự động (ASR), tiện ích chủ động bỏ qua việc gửi yêu cầu lên Google Gemini AI và sử dụng trực tiếp bản dịch tự động của YouTube (kết hợp Google Translate tốc độ cao), giúp tiết kiệm 100% hạn ngạch API của người dùng và triệt tiêu hoàn toàn nguy cơ vượt ngưỡng 15 RPM.
 
 ### 2.4. MyMemory Translated (Dịch thuật ngữ cảnh phân tán)
 - Phương thức: Tích hợp cơ sở dữ liệu bộ nhớ dịch thuật phân tán MyMemory Translated API kết hợp thuật toán tự động nhận diện hệ chữ viết (Script Detection) và chuyển đổi dự phòng.

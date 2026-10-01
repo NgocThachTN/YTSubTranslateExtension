@@ -1054,7 +1054,7 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
 /**
  * Handle translation requests with caching and multi-engine routing
  */
-async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi', service = 'google', apiKey = '', model = 'gemini-3.5-flash-lite', videoTitle = '', style = 'auto', pronounRole = 'auto' }) {
+async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi', service = 'google', apiKey = '', model = 'gemini-3.5-flash-lite', videoTitle = '', style = 'auto', pronounRole = 'auto', isAutoTranslate = false, bypassGemini = false }) {
   const trimmed = (text || '').trim();
   if (!trimmed) {
     return { success: true, translation: '' };
@@ -1077,7 +1077,10 @@ async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi',
 
     if (service === 'gemini') {
       const gKey = (apiKey || '').trim();
-      if (gKey) {
+      // If YouTube auto-translate is active or bypassGemini is set, do not call Gemini to avoid request spam & save user quota
+      if (isAutoTranslate || bypassGemini) {
+        translated = await translateWithFreeGoogleEndpoint(trimmed, sourceLang, targetLang);
+      } else if (gKey) {
         try {
           translated = await translateWithGemini(trimmed, sourceLang, targetLang, gKey, model, videoTitle, style, pronounRole);
         } catch (err) {
@@ -1158,6 +1161,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'TRANSLATE_BATCH_GEMINI') {
+    if (request.isAutoTranslate || request.bypassGemini) {
+      sendResponse({ success: true, translations: [] });
+      return true;
+    }
     translateBatchWithGemini(
       request.lines,
       request.sourceLang || 'auto',
