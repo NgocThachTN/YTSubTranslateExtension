@@ -363,7 +363,7 @@
     }
 
     // 4. Check for Music / Songs (if not news/show)
-    const musicKeywords = /\b(mv|official music video|official video|lyric video|lyrics|audio|visualizer|m\/v|cover|remix|ft\.|feat\.|nhạc|bài hát|ca khúc|ost|soundtrack|live session)\b/i;
+    const musicKeywords = /\b(mv|official music video|official video|lyric video|lyrics|audio|visualizer|m\/v|cover|remix|ft\.|feat\.|nhạc|bài hát|ca khúc|ost|soundtrack|live session|single|album|op|ed|theme|vocal|song|instrumental)\b|♪|♫|主題歌|挿入歌|楽曲|新曲|メドレー|乃木坂46|櫻坂46|日向坂46|欅坂46|akb48|ske48|nmb48|hkt48|=love|≠me|≒joy|モーニング娘|ももいろクローバー|ヨルシカ|ずとまよ|ずっと真夜中|結束バンド|初音ミク/i;
     if (genre !== 'news' && genre !== 'reality_show') {
       if (musicKeywords.test(titleLower) || artist) {
         genre = 'music';
@@ -1078,24 +1078,7 @@
     // Instantly trigger lookahead cluster pre-translation for upcoming cues!
     prioritizeUpcomingClusters();
 
-    // 3. Fast Instant Bridge: If service is Gemini AI, display ultra-fast Google translation (50ms)
-    // so the subtitle at 1s, 5s is NEVER delayed or missing while Gemini cluster completes!
-    if (service === 'gemini') {
-      const googleKey = getCacheKey('google', settings.sourceLang, settings.targetLang, currentText);
-      const googleCached = localCache.get(googleKey);
-
-      if (googleCached) {
-        renderSubtitlesSimultaneously(currentText, googleCached);
-      } else {
-        translateWithFreeGoogleEndpoint(currentText, settings.sourceLang, settings.targetLang)
-          .then((quickTrans) => {
-            if (quickTrans && lastCaptionText === currentText && !localCache.has(cacheKey)) {
-              renderSubtitlesSimultaneously(currentText, quickTrans);
-            }
-          })
-          .catch(() => {});
-      }
-    }
+    // 3. Fetch primary translation and render seamlessly
 
     // 4. Fetch primary translation (Gemini AI) and upgrade seamlessly
     const result = await translateTextFast(currentText);

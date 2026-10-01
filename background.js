@@ -267,7 +267,7 @@ function resolveEffectiveGenre(requestedStyle = 'auto', videoContext = '') {
   if (/\b(running man|knowing bros|2 ngày 1 đêm|talkshow|podcast|phỏng vấn|interview|hot ones|the tonight show|game show|weekly idol|amazing saturday|ep\.\s*\d+|tập\s*\d+|show thực tế)\b|乃木坂工事中|nogizaka under construction|そこ曲がったら|日向坂で会いましょう|乃木坂どこへ|スター誕生|akbingo|サヨナラ毛利さん|モニタリング|水曜日のダウンタウン|ロンドンハーツ|アメトーーク|しゃべくり007|それsnow man|vs嵐|嵐にしやがれ|バラエティ|月曜から夜ふかし/i.test(videoContext || '')) {
     return 'reality_show';
   }
-  if (/\b(mv|official music video|lyrics|audio|song|ca khúc|bài hát|album|♪|♫)\b/i.test(lower)) {
+  if (/\b(mv|official music video|official video|lyric video|lyrics|audio|visualizer|m\/v|cover|remix|ft\.|feat\.|nhạc|bài hát|ca khúc|ost|soundtrack|live session|single|album|op|ed|theme|vocal|song|instrumental)\b|♪|♫|主題歌|挿入歌|楽曲|新曲|メドレー|乃木坂46|櫻坂46|日向坂46|欅坂46|akb48|ske48|nmb48|hkt48|=love|≠me|≒joy|モーニング娘|ももいろクローバー|ヨルシカ|ずとまよ|ずっと真夜中|結束バンド|初音ミク/i.test(videoContext || '')) {
     return 'lyrics';
   }
 
@@ -291,7 +291,7 @@ function detectFigureGender(videoContext = '') {
     // Global & US-UK Female Artists
     /\b(laufey|aimer|yoasobi|zutomayo|yorushika|milet|claris|chappell roan|gracie abrams|sabrina carpenter|olivia dean|beabadoobee|billie eilish|olivia rodrigo|taylor swift|adele|ariana grande|dua lipa|katy perry|rihanna|lady gaga|beyonc[eé]|selena gomez|mariah carey|whitney houston|celine dion|avril lavigne|camila cabello|shakira|sia|lana del rey|halsey|miley cyrus|demi lovato|carly rae jepsen|bebe rexha|ellie goulding|kesha|alessia cara|lorde|anne-marie|madonna|britney spears|tate mcrae|sza|doja cat|cardi b|megan thee stallion|renee rapp|madison beer|dove cameron|raye|tinashe|kali uchis|rosal[ií]a|karol g|anitta|clairo|phoebe bridgers|lucy dacus|alicia keys|norah jones|amy winehouse|bjork|florence welch|katseye)\b/i,
     // Japanese Female Artists & Groups
-    /\b(ado|lisa|reona|ikura|suis|acaね|daoko|chanmina|awich|yama|minami|sayuri|majiko|tuyu|eir aoi|kano|hanatan|nano|utada hikaru|utada|ayumi hamasaki|namie amuro|yui|kana nishino|aimyon|aoi teshima|chihiro onitsuka|mika nakashima|chico with honeyworks|honeyworks|supercell|atashi|clariS|akb48|nogizaka46|sakurazaka46|hinatazaka46|babymetal)\b/i,
+    /\b(ado|lisa|reona|ikura|suis|acaね|daoko|chanmina|awich|yama|minami|sayuri|majiko|tuyu|eir aoi|kano|hanatan|nano|utada hikaru|utada|ayumi hamasaki|namie amuro|yui|kana nishino|aimyon|aoi teshima|chihiro onitsuka|mika nakashima|chico with honeyworks|honeyworks|supercell|atashi|clariS|akb48|nogizaka46|sakurazaka46|hinatazaka46|babymetal|ske48|nmb48|hkt48|ngt48|stu48|perfume|miwa|shishamo|scandal|silent siren|tamaki nami|hitomi shimatani|uru|mai kuraki|zard|mizuki nana|hayashibara megumi|kana hanazawa|inori minase|saori hayami|maaya sakamoto|angela aki)\b|乃木坂46|櫻坂46|日向坂46|欅坂46|akb48|ske48|nmb48|hkt48|ngt48|stu48|=love|≠me|≒joy|坂道|モーニング娘|ももいろクローバーz|ヨルシカ|ずとまよ|ずっと真夜中でいいのに|結束バンド|初音ミク/i,
     // Korean Female Artists & Girl Groups
     /\b(iu|taeyeon|ros[eé]|jennie|jisoo|lisa|blackpink|twice|aespa|ive|newjeans|le sserafim|red velvet|itzy|gidle|\(g\)i-dle|illit|babymonster|nmixx|stayc|kiss of life|meovv|chungha|sunmi|hwasa|lee hi|heize|bol4|davichi|mamamoo|sistar|girls' generation|snsd|kara|2ne1|apink|exid|oh my girl|fromis_9|loona|triples|boa|hyuna|somi|kwon eun bi|yena|chuu)\b/i,
     // Vietnamese Female Artists & Celebrities
@@ -471,10 +471,24 @@ function cleanOutputByGenre(text, effectiveGenre, role, videoTitle = '') {
   }
 
   if (effectiveGenre === 'lyrics') {
+    // 1. Tuyệt đối loại bỏ từ ngữ thô tục, chửi thề, văng tục trong lời bài hát
+    cleaned = cleaned
+      .replace(/\b(đéo|đếch)\b/gi, 'chẳng')
+      .replace(/\b(mẹ kiếp|chó chết|khốn nạn)\b/gi, 'đớn đau thay')
+      .replace(/\bchết tiệt\b/gi, 'trời ơi')
+      .replace(/\b(đồ khốn|kẻ khốn)\b/gi, 'kẻ vô tâm')
+      .replace(/\bvãi\b/gi, 'quá')
+      .replace(/\b(vcl|đm|dkm|đụ|lồn|cặc|buồi)\b/gi, '');
+
     if (effectiveRole === 'female') {
       cleaned = cleaned
+        // 1st person pronouns -> Em (loại bỏ triệt để Tôi, Tớ, Tao, Mình)
         .replace(/\bTôi\b/g, 'Em')
         .replace(/\btôi\b/g, 'em')
+        .replace(/\bTớ\b/g, 'Em')
+        .replace(/\btớ\b/g, 'em')
+        .replace(/\bTao\b/g, 'Em')
+        .replace(/\btao\b/g, 'em')
         .replace(/\bchính mình\b/gi, 'chính em')
         .replace(/\bbản thân mình\b/gi, 'bản thân em')
         .replace(/\bcủa mình\b/gi, 'của em')
@@ -482,13 +496,25 @@ function cleanOutputByGenre(text, effectiveGenre, role, videoTitle = '') {
         .replace(/\bcho mình\b/gi, 'cho em')
         .replace(/\bMình\b/g, 'Em')
         .replace(/\bmình\b/g, 'em')
+        // 2nd person pronouns -> Anh (loại bỏ triệt để Cậu, Mày, Bạn)
+        .replace(/\bCậu\b/g, 'Anh')
+        .replace(/\bcậu\b/g, 'anh')
+        .replace(/\bMày\b/g, 'Anh')
+        .replace(/\bmày\b/g, 'anh')
+        .replace(/\bBạn\b/g, 'Anh')
+        .replace(/\bbạn\b/g, 'anh')
         .replace(/^(Anh|anh) (nghĩ|thấy|nhớ|muốn|biết|yêu|cần|đang|đã|sẽ|chẳng|không|bước|khóc|mơ|đợi|chờ|lạc lối|cô đơn)\b/g, (m, p1, p2) => {
           return (p1 === 'Anh' ? 'Em' : 'em') + ' ' + p2;
         });
     } else if (effectiveRole === 'male') {
       cleaned = cleaned
+        // 1st person pronouns -> Anh (loại bỏ triệt để Tôi, Tớ, Tao, Mình)
         .replace(/\bTôi\b/g, 'Anh')
         .replace(/\btôi\b/g, 'anh')
+        .replace(/\bTớ\b/g, 'Anh')
+        .replace(/\btớ\b/g, 'anh')
+        .replace(/\bTao\b/g, 'Anh')
+        .replace(/\btao\b/g, 'anh')
         .replace(/\bchính mình\b/gi, 'chính anh')
         .replace(/\bbản thân mình\b/gi, 'bản thân anh')
         .replace(/\bcủa mình\b/gi, 'của anh')
@@ -496,9 +522,23 @@ function cleanOutputByGenre(text, effectiveGenre, role, videoTitle = '') {
         .replace(/\bcho mình\b/gi, 'cho anh')
         .replace(/\bMình\b/g, 'Anh')
         .replace(/\bmình\b/g, 'anh')
+        // 2nd person pronouns -> Em (loại bỏ triệt để Cậu, Mày, Bạn)
+        .replace(/\bCậu\b/g, 'Em')
+        .replace(/\bcậu\b/g, 'em')
+        .replace(/\bMày\b/g, 'Em')
+        .replace(/\bmày\b/g, 'em')
+        .replace(/\bBạn\b/g, 'Em')
+        .replace(/\bbạn\b/g, 'em')
         .replace(/^(Em|em) (nghĩ|thấy|nhớ|muốn|biết|yêu|cần|đang|đã|sẽ|chẳng|không|bước|khóc|mơ|đợi|chờ|lạc lối|cô đơn)\b/g, (m, p1, p2) => {
           return (p1 === 'Em' ? 'Anh' : 'anh') + ' ' + p2;
         });
+    } else {
+      // General/Neutral lyrics: Cấm tuyệt đối "tao - mày"
+      cleaned = cleaned
+        .replace(/\bTao\b/g, 'Tôi')
+        .replace(/\btao\b/g, 'tôi')
+        .replace(/\bMày\b/g, 'Bạn')
+        .replace(/\bmày\b/g, 'bạn');
     }
   } else if (effectiveGenre === 'reality_show') {
     // In reality shows, avoid inappropriate romantic couple address (anh yêu / em yêu)
@@ -597,32 +637,53 @@ function getPronounInstruction(effectiveRole = 'auto', videoTitle = '', effectiv
   }
 
   // 3. SONG LYRICS DIRECTIVE
+  const isJpIdolSong = /(乃木坂|櫻坂|日向坂|akb48|ske48|nmb48|hkt48|ngt48|stu48|=love|≠me|≒joy|坂道|モーニング娘|ももいろクローバー|perfume|ヨルシカ|ずとまよ|ずっと真夜中でいいのに|結束バンド|初音ミク|aimer|yoasobi|zutomayo|yorushika|lisa|reona|ado|j-pop|japanese|anime|vocaloid|chuyên|bài hát nhật)/i.test(videoTitle);
+
+  const jpIdolLyricNotice = isJpIdolSong
+    ? `\n- SPECIAL DIRECTIVE FOR JAPANESE IDOL & J-POP MUSIC (NHẠC IDOL NHẬT & J-POP):
+  * Maintain the pure, innocent, touching youthfulness (thanh xuân trong sáng, e ấp, tinh khôi) characteristic of Japanese idol music.
+  * For Japanese colloquialisms or emotional outbursts like "あんた" (anta), "お前" (omae), "あいつ" (aitsu), "くそ" (kuso), "ちくしょう":
+    DO NOT translate literally into aggressive words!
+    Translate as delicate, pouting, endearing frustration ("anh", "người ấy", "sao anh lại thế chứ", "đáng ghét thật đấy", "tức thật chứ").
+  * ABSOLUTELY NEVER use "tao - mày" or coarse language for Japanese idol lyrics!`
+    : '';
+
+  const vulgarBanNotice = `
+- ABSOLUTE PROHIBITION ON VULGARITY & RUDE PRONOUNS (TUYỆT ĐỐI CẤM VĂNG TỤC, CẤM "TAO - MÀY"):
+  * NEVER use swear words, profanities, or vulgar slang (STRICT BAN on: "đéo", "đếch", "mẹ kiếp", "chết tiệt", "khốn kiếp", "đồ khốn", "vãi", etc.).
+  * NEVER use rude/aggressive pronouns "tao - mày", "mày - tao" under any circumstances. Even if the original song has English curses (damn, bitch, shit, fuck) or Japanese slang, adapt them poetically into natural lyrical emotion (pain, regret, heartbreak, sweet pouting), NOT vulgarity.
+- ROMANTIC EMOTIONALITY ("TÌNH", GIÀU CHẤT THƠ, TỰ NHIÊN NHƯ NGƯỜI DỊCH):
+  * Song lyrics must sound poetic, melodic, deeply emotional, and authentic ("tình", êm dịu, da diết).
+  * Translate like a skilled human music lyricist: flowing cadence, emotional resonance, rich romantic tone. For love songs, make it genuinely sweet, intimate, or touching.`;
+
   if (effectiveRole === 'female') {
-    return `\nCRITICAL PRONOUN DIRECTIVE - FEMALE SINGER (ĐỒNG NHẤT 100% NGÔI XƯNG NỮ HÁT):
-- The singer is FEMALE. You MUST maintain an absolute, 100% consistent "Em - Anh" lyrical voice across EVERY SINGLE LINE of the song.
-- 1st-person pronouns ("I", "me", "my", "mine", "myself") MUST ALWAYS be translated as "em" in every line.
-  * STRICT PROHIBITION: NEVER use "tôi", NEVER use "mình", NEVER use "anh" for the singer anywhere in the song!
-  * Even if a line has no romantic words (e.g. "I walk alone in the rain", "I think about the past"), translate "I" as "em" ("Em bước một mình dưới mưa", "Em nghĩ về quá khứ").
-- 2nd-person pronouns ("you", "your", "yours") MUST ALWAYS be translated as "anh" (or "người" if poetic).
-- DO NOT MIX PRONOUNS: The singer must remain "em" from the first line to the very last line!`;
+    return `\nCRITICAL PRONOUN DIRECTIVE - FEMALE SINGER / IDOL (ĐỒNG NHẤT 100% NGÔI XƯNG NỮ HÁT & GIÀU CẢM XÚC):${vulgarBanNotice}${jpIdolLyricNotice}
+- SINGER IS FEMALE: You MUST maintain an absolute, 100% consistent "Em - Anh" lyrical voice across EVERY SINGLE LINE of the song.
+- 1st-person pronouns ("I", "me", "my", "mine", "myself", "watashi", "boku", "atashi") MUST ALWAYS be translated as "em" in every line.
+  * STRICT BAN: NEVER use "tôi", NEVER use "mình", NEVER use "tớ", NEVER use "tao", NEVER use "anh" for the female singer anywhere in the song!
+  * Even in descriptive or reflective lines (e.g. "I walk alone in the rain"), translate "I" as "em" ("Em bước một mình dưới mưa").
+- 2nd-person pronouns ("you", "your", "yours", "anata", "kimi", "anta", "omae") MUST ALWAYS be translated as "anh" (or "người" if poetic).
+  * STRICT BAN: NEVER translate "you" as "cậu", NEVER as "mày", NEVER as "bạn"!
+- DO NOT MIX PRONOUNS: Singer remains "em" and the loved one remains "anh" from the first line to the very last line!`;
   }
 
   if (effectiveRole === 'male') {
-    return `\nCRITICAL PRONOUN DIRECTIVE - MALE SINGER (ĐỒNG NHẤT 100% NGÔI XƯNG NAM HÁT):
-- The singer is MALE. You MUST maintain an absolute, 100% consistent "Anh - Em" lyrical voice across EVERY SINGLE LINE of the song.
-- 1st-person pronouns ("I", "me", "my", "mine", "myself") MUST ALWAYS be translated as "anh" in every line.
-  * STRICT PROHIBITION: NEVER use "tôi", NEVER use "mình", NEVER use "em" for the singer anywhere in the song!
-  * Even if a line has no romantic words (e.g. "I walk alone in the rain", "I think about the past"), translate "I" as "anh" ("Anh bước một mình dưới mưa", "Anh nghĩ về quá khứ").
-- 2nd-person pronouns ("you", "your", "yours") MUST ALWAYS be translated as "em" (or "người" if poetic).
-- DO NOT MIX PRONOUNS: The singer must remain "anh" from the first line to the very last line!`;
+    return `\nCRITICAL PRONOUN DIRECTIVE - MALE SINGER (ĐỒNG NHẤT 100% NGÔI XƯNG NAM HÁT & GIÀU CẢM XÚC):${vulgarBanNotice}
+- SINGER IS MALE: You MUST maintain an absolute, 100% consistent "Anh - Em" lyrical voice across EVERY SINGLE LINE of the song.
+- 1st-person pronouns ("I", "me", "my", "mine", "myself", "boku", "ore") MUST ALWAYS be translated as "anh" in every line.
+  * STRICT BAN: NEVER use "tôi", NEVER use "mình", NEVER use "tớ", NEVER use "tao", NEVER use "em" for the male singer anywhere in the song!
+  * Even in descriptive or reflective lines, translate "I" as "anh" ("Anh bước một mình dưới mưa").
+- 2nd-person pronouns ("you", "your", "yours", "kimi", "omae") MUST ALWAYS be translated as "em" (or "người" if poetic).
+  * STRICT BAN: NEVER translate "you" as "cậu", NEVER as "mày", NEVER as "bạn"!
+- DO NOT MIX PRONOUNS: Singer remains "anh" and the loved one remains "em" from the first line to the very last line!`;
   }
 
   if (effectiveRole === 'neutral') {
-    return `\nCRITICAL PRONOUN DIRECTIVE - NEUTRAL / REFLECTIVE (ĐỒNG NHẤT 100% NGÔI XƯNG TRUNG TÍNH):
+    return `\nCRITICAL PRONOUN DIRECTIVE - NEUTRAL / REFLECTIVE LYRICS:${vulgarBanNotice}
 - Maintain an absolute, 100% consistent "Tôi - Bạn" or "Ta - Người" perspective across all lines.
 - 1st-person pronouns ("I", "me", "my") MUST ALWAYS be translated as "tôi" (or "ta") in every line.
-  * STRICT PROHIBITION: NEVER use "anh", NEVER use "em" for the singer anywhere in the song!
-- 2nd-person pronouns ("you", "your") MUST ALWAYS be translated as "bạn" or "người".
+  * STRICT BAN: NEVER use "tao", NEVER use "anh", NEVER use "em" for the singer anywhere in the song!
+- 2nd-person pronouns ("you", "your") MUST ALWAYS be translated as "bạn" or "người" (NEVER "mày").
 - DO NOT MIX PRONOUNS across lines!`;
   }
 
@@ -632,12 +693,12 @@ function getPronounInstruction(effectiveRole = 'auto', videoTitle = '', effectiv
     ? `\n- ARTIST IDENTIFICATION: The performer is identified as "${parsedArtist}". Look up your knowledge base to determine whether "${parsedArtist}" is female, male, or a band.`
     : `\n- ARTIST / CONTEXT IDENTIFICATION: Inspect the Video Metadata / Title to identify the performing artist and their gender/persona.`;
 
-  return `\nCRITICAL PRONOUN DIRECTIVE - MANDATORY ARTIST CHECK (BẮT BUỘC KIỂM TRA NGHỆ SĨ TRƯỚC KHI DỊCH):${artistLookupHint}
+  return `\nCRITICAL PRONOUN DIRECTIVE - SONG LYRICS (QUY TẮC DỊCH NHẠC GIÀU CẢM XÚC & BẢO VỆ NGÔI XƯNG):${vulgarBanNotice}${jpIdolLyricNotice}${artistLookupHint}
 - Determine the singer's gender/perspective from the artist name or song title BEFORE translating:
-  * Female singer/perspective: Singer is ALWAYS "em" (self), listener is ALWAYS "anh" (or "người"). ABSOLUTE BAN: NEVER use "tôi" or "anh" for a female singer!
-  * Male singer/perspective: Singer is ALWAYS "anh" (self), listener is ALWAYS "em" (or "người"). ABSOLUTE BAN: NEVER use "tôi" or "em" for a male singer!
-  * Band, rap, or philosophical/neutral song: Singer is ALWAYS "tôi" (or "ta"), listener is ALWAYS "bạn" or "người".
-- ABSOLUTE PROHIBITION ON MIXING PRONOUNS: Stick to ONE SINGLE lyrical perspective 100% consistently across EVERY SINGLE LINE of the song. Do not flip between "tôi", "em", and "anh"!`;
+  * Female singer/idol: Singer is ALWAYS "em" (self), listener/beloved is ALWAYS "anh" (or "người"). BAN: "tôi", "tớ", "cậu", "tao", "mày"!
+  * Male singer: Singer is ALWAYS "anh" (self), listener/beloved is ALWAYS "em" (or "người"). BAN: "tôi", "tớ", "cậu", "tao", "mày"!
+  * Band, duet, or philosophical song: Singer is "tôi" (hoặc "ta"), listener is "bạn" hoặc "người" (hoặc "anh - em" nếu là tình ca).
+- ABSOLUTE PROHIBITION ON MIXING PRONOUNS: Stick to ONE SINGLE lyrical perspective 100% consistently across EVERY SINGLE LINE of the song. Do not flip between "tôi", "em", "anh", or "tớ"!`;
 }
 
 /**
@@ -649,7 +710,11 @@ function buildGeminiSubtitlePrompt(text, targetName, videoTitle = '', style = 'a
   let styleInstruction = '';
 
   if (effectiveGenre === 'lyrics') {
-    styleInstruction = `MODE: SONG LYRICS. Translate poetically, emotionally, and rhythmically like a top Vietnamese lyricist (phổ lời Việt êm dịu, giàu chất thơ và nhạc tính, tránh dịch máy móc cứng nhắc). Preserve musical notes (♪, ♫) if present.`;
+    const isJpSong = /(乃木坂|櫻坂|日向坂|akb48|坂道|aimer|yoasobi|zutomayo|yorushika|lisa|reona|ado|j-pop|japanese|anime|vocaloid|chuyên|bài hát nhật)/i.test(videoTitle);
+    const jpSpecific = isJpSong
+      ? ` SPECIAL NOTE FOR JAPANESE IDOL & J-POP: Capture the pure, youthful, gentle romance (thanh xuân trong sáng, ngọt ngào, giàu chất thơ). ABSOLUTE BAN on vulgar words, swearing, or rude pronouns (tao - mày).`
+      : '';
+    styleInstruction = `MODE: SONG LYRICS. Translate with deep emotion, lyrical grace, and poetic romance like an experienced Vietnamese lyricist (phổ lời Việt mượt mà, da diết, tình cảm, sâu lắng, đậm chất thơ; các bài tình cảm phải thật 'tình'; tuyệt đối không dịch khô cứng máy móc, không văng tục thô lỗ hay xưng hô tao mày). Preserve musical notes (♪, ♫) if present.${jpSpecific}`;
   } else if (effectiveGenre === 'reality_show') {
     styleInstruction = `MODE: REALITY SHOW & TALK SHOW. Translate lively, authentic, witty, and conversational Vietnamese for reality/game show dialogue.`;
   } else if (effectiveGenre === 'news') {
@@ -675,7 +740,11 @@ function buildGeminiBatchSubtitlePrompt(lines, targetName, videoTitle = '', styl
   let styleInstruction = '';
 
   if (effectiveGenre === 'lyrics') {
-    styleInstruction = `MODE: SONG LYRICS. Translate these continuous lines as song lyrics with poetic cadence, melodic flow, and deep emotion across lines (phổ lời Việt êm ái, giàu cảm xúc, uyển chuyển). Preserve musical notes (♪, ♫) if present.`;
+    const isJpSong = /(乃木坂|櫻坂|日向坂|akb48|坂道|aimer|yoasobi|zutomayo|yorushika|lisa|reona|ado|j-pop|japanese|anime|vocaloid|chuyên|bài hát nhật)/i.test(videoTitle);
+    const jpSpecific = isJpSong
+      ? ` SPECIAL NOTE FOR JAPANESE IDOL & J-POP: Deliver pure, youthful, touching lyrical romance (thanh xuân trong sáng, e ấp, ngọt ngào). ABSOLUTE BAN on vulgar words or rude 'tao - mày' pronouns.`
+      : '';
+    styleInstruction = `MODE: SONG LYRICS. Translate these continuous lines with emotional depth, poetic cadence, and romantic warmth (phổ lời bài hát tình cảm, mượt mà, sâu lắng, có hồn như người dịch; các bài tình yêu phải thật 'tình' và êm dịu; tuyệt đối cấm lời thô tục hay vai vế 'tao mày'). Preserve musical notes (♪, ♫) if present.${jpSpecific}`;
   } else if (effectiveGenre === 'reality_show') {
     styleInstruction = `MODE: REALITY SHOW & TALK SHOW. Translate these continuous dialogue lines as authentic, witty, lively conversation for variety/reality show.`;
   } else if (effectiveGenre === 'news') {
@@ -1030,6 +1099,13 @@ async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi',
     } else {
       // Default: Google Translate fast endpoints
       translated = await translateWithFreeGoogleEndpoint(trimmed, sourceLang, targetLang);
+    }
+
+    // Enforce genre and pronoun sanitization across all engine outputs (Google, MyMemory, Gemini)
+    if (translated) {
+      const effectiveGenre = resolveEffectiveGenre(style, videoTitle);
+      const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
+      translated = cleanOutputByGenre(translated, effectiveGenre, effectiveRole, videoTitle);
     }
 
     // Add to cache with size limit check
