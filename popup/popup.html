@@ -15,7 +15,7 @@
         <img src="../icons/icon48.png" alt="YT ViSub Logo" class="brand-logo">
         <div class="brand-info">
           <span class="brand-title">YT ViSub</span>
-          <span class="brand-version" id="brand-version">v1.7.0</span>
+          <span class="brand-version" id="brand-version">v1.7.1</span>
         </div>
       </div>
       <div class="header-right">
@@ -149,10 +149,57 @@
             <!-- Row: Cỡ chữ -->
             <div class="setting-row-vertical">
               <div class="row-header-inline">
-                <span class="row-label">Cỡ chữ phụ đề</span>
+                <span class="row-label">Cỡ chữ phụ đề (Cửa sổ)</span>
                 <span id="font-size-val" class="pill-badge">20px</span>
               </div>
               <input type="range" id="slider-font-size" min="14" max="36" step="1" value="20" class="range-slider">
+            </div>
+
+            <!-- Row: Tối ưu khi Toàn màn hình -->
+            <div class="setting-row">
+              <div class="row-text-group">
+                <span class="row-label">Tối ưu khi Toàn màn hình</span>
+                <span class="row-sublabel">Tự động tăng cỡ chữ & co giãn ở chế độ Fullscreen</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-fullscreen-optimize" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <!-- Row: Chế độ cỡ chữ toàn màn hình -->
+            <div class="setting-row" id="row-fullscreen-mode">
+              <div class="row-text-group">
+                <span class="row-label">Cỡ chữ Fullscreen</span>
+                <span class="row-sublabel">Tỉ lệ phóng to khi xem toàn màn hình</span>
+              </div>
+              <select id="select-fullscreen-mode" class="custom-select">
+                <option value="sync_yt" selected>Đồng bộ chuẩn YouTube (Khuyên dùng)</option>
+                <option value="1.25">Phóng to 125%</option>
+                <option value="1.4">Phóng to 140%</option>
+                <option value="1.5">Phóng to 150%</option>
+                <option value="1.75">Phóng to 175%</option>
+                <option value="2.0">Phóng to 200%</option>
+                <option value="custom">Tùy chỉnh cỡ chữ (px)...</option>
+              </select>
+            </div>
+
+            <!-- Row: Cỡ chữ tùy chỉnh khi toàn màn hình -->
+            <div class="setting-row-vertical" id="row-fullscreen-custom-size" style="display: none;">
+              <div class="row-header-inline">
+                <span class="row-label">Cỡ chữ Fullscreen riêng</span>
+                <span id="fullscreen-size-val" class="pill-badge">32px</span>
+              </div>
+              <input type="range" id="slider-fullscreen-size" min="18" max="54" step="1" value="32" class="range-slider">
+            </div>
+
+            <!-- Fullscreen Info Badge -->
+            <div id="fullscreen-hint-badge" class="stats-inset-box" style="margin-top: -4px; margin-bottom: 4px;">
+              <div class="stats-line">
+                <span class="stats-title" id="fullscreen-hint-label">Chuẩn YouTube</span>
+                <span class="stats-dots"></span>
+                <span id="fullscreen-hint-val" class="stats-value">Tự co giãn (~32px ở màn 1080p)</span>
+              </div>
             </div>
 
             <!-- Row: Độ tối phông nền -->
@@ -204,7 +251,12 @@
 
             <!-- Live Preview Card Box -->
             <div class="preview-area-wrapper">
-              <span class="preview-area-label">Xem trước giao diện</span>
+              <div class="preview-header-row">
+                <span class="preview-area-label">Xem trước giao diện</span>
+                <button type="button" id="btn-preview-fs" class="btn-subtle btn-preview-toggle" title="Chuyển đổi xem thử giữa chế độ cửa sổ và toàn màn hình">
+                  Toàn màn hình: Tắt
+                </button>
+              </div>
               <div class="preview-display-stage">
                 <div id="preview-sub-box" class="preview-unified-box">
                   <div id="preview-orig-wrapper" class="preview-line-orig-wrap">
@@ -466,7 +518,7 @@
             <div class="version-compare-grid">
               <div class="version-stat-card">
                 <span class="version-stat-label">Phiên bản hiện tại</span>
-                <span class="version-stat-val" id="current-version-display">v1.4.0</span>
+                <span class="version-stat-val" id="current-version-display">v1.7.1</span>
                 <span class="version-stat-sub">Đang cài trên máy</span>
               </div>
               <div class="version-stat-card">

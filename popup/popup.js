@@ -20,6 +20,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Display tab controls
   const sliderFontSize = document.getElementById('slider-font-size');
   const fontSizeVal = document.getElementById('font-size-val');
+  const toggleFullscreenOptimize = document.getElementById('toggle-fullscreen-optimize');
+  const selectFullscreenMode = document.getElementById('select-fullscreen-mode');
+  const rowFullscreenMode = document.getElementById('row-fullscreen-mode');
+  const rowFullscreenCustomSize = document.getElementById('row-fullscreen-custom-size');
+  const sliderFullscreenSize = document.getElementById('slider-fullscreen-size');
+  const fullscreenSizeVal = document.getElementById('fullscreen-size-val');
+  const fullscreenHintBadge = document.getElementById('fullscreen-hint-badge');
+  const fullscreenHintLabel = document.getElementById('fullscreen-hint-label');
+  const fullscreenHintVal = document.getElementById('fullscreen-hint-val');
+  const btnPreviewFs = document.getElementById('btn-preview-fs');
   const sliderBgOpacity = document.getElementById('slider-bg-opacity');
   const bgOpacityVal = document.getElementById('bg-opacity-val');
   const colorTranslated = document.getElementById('color-translated');
@@ -92,6 +102,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     sourceLang: 'auto',
     targetLang: 'vi',
     fontSize: 20,
+    fullscreenOptimize: true,
+    fullscreenScaleMode: 'sync_yt',
+    fullscreenCustomSize: 32,
     fontColor: '#FFFFFF',
     originalColor: '#FFFFFF',
     bgOpacity: 75,
@@ -138,6 +151,66 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 1600);
   }
 
+  let isPreviewFullscreen = false;
+
+  /**
+   * Calculate simulated preview font size based on settings and preview state
+   */
+  function getPreviewEffectiveFontSize() {
+    const baseFs = currentSettings.fontSize || 20;
+    if (!isPreviewFullscreen || !currentSettings.fullscreenOptimize) {
+      return baseFs;
+    }
+
+    const mode = currentSettings.fullscreenScaleMode || 'sync_yt';
+    if (mode === 'sync_yt') {
+      // Standard YouTube 1080p simulated font size (~33px at 20px base)
+      const ytStandard = 33;
+      if (baseFs === 20) return ytStandard;
+      return Math.round(ytStandard * (baseFs / 20));
+    }
+    if (mode === 'custom') {
+      return currentSettings.fullscreenCustomSize || 32;
+    }
+    const factor = parseFloat(mode);
+    if (!isNaN(factor) && factor > 0) {
+      return Math.round(baseFs * factor);
+    }
+    return baseFs;
+  }
+
+  /**
+   * Update fullscreen UI rows and status badge
+   */
+  function updateFullscreenUI() {
+    const isOpt = currentSettings.fullscreenOptimize !== false;
+    if (toggleFullscreenOptimize) toggleFullscreenOptimize.checked = isOpt;
+    if (rowFullscreenMode) rowFullscreenMode.style.display = isOpt ? 'flex' : 'none';
+
+    const isCustom = isOpt && currentSettings.fullscreenScaleMode === 'custom';
+    if (rowFullscreenCustomSize) rowFullscreenCustomSize.style.display = isCustom ? 'flex' : 'none';
+    if (fullscreenHintBadge) fullscreenHintBadge.style.display = isOpt ? 'block' : 'none';
+
+    if (isOpt && fullscreenHintLabel && fullscreenHintVal) {
+      const mode = currentSettings.fullscreenScaleMode || 'sync_yt';
+      const baseFs = currentSettings.fontSize || 20;
+      if (mode === 'sync_yt') {
+        const est = baseFs === 20 ? 33 : Math.round(33 * (baseFs / 20));
+        fullscreenHintLabel.textContent = 'Chuẩn YouTube';
+        fullscreenHintVal.textContent = `Tự co giãn (~${est}px ở màn 1080p)`;
+      } else if (mode === 'custom') {
+        fullscreenHintLabel.textContent = 'Cỡ riêng';
+        fullscreenHintVal.textContent = `${currentSettings.fullscreenCustomSize || 32}px khi toàn màn hình`;
+      } else {
+        const factor = parseFloat(mode) || 1.5;
+        const pct = Math.round(factor * 100);
+        const est = Math.round(baseFs * factor);
+        fullscreenHintLabel.textContent = `Phóng to ${pct}%`;
+        fullscreenHintVal.textContent = `~${est}px khi toàn màn hình`;
+      }
+    }
+  }
+
   /**
    * Update live preview styling
    */
@@ -146,21 +219,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const isBilingual = currentSettings.displayMode === 'bilingual';
     const bgVal = `rgba(8, 8, 8, ${(currentSettings.bgOpacity ?? 75) / 100})`;
+    const effectiveFs = getPreviewEffectiveFontSize();
 
     previewSubBox.style.backgroundColor = bgVal;
-    previewSubBox.style.fontSize = `${currentSettings.fontSize}px`;
+    previewSubBox.style.fontSize = `${effectiveFs}px`;
+    previewSubBox.style.padding = isPreviewFullscreen && currentSettings.fullscreenOptimize ? '6px 14px' : '4px 10px';
+    previewSubBox.style.borderRadius = isPreviewFullscreen && currentSettings.fullscreenOptimize ? '6px' : '4px';
 
     if (previewOrigWrapper) {
       previewOrigWrapper.style.display = isBilingual ? 'block' : 'none';
+      previewOrigWrapper.style.marginBottom = isPreviewFullscreen && currentSettings.fullscreenOptimize ? '3px' : '2px';
     }
 
     if (previewOrigText) {
-      previewOrigText.style.fontSize = `${Math.round(currentSettings.fontSize * 0.92)}px`;
+      previewOrigText.style.fontSize = `${Math.round(effectiveFs * 0.92)}px`;
       previewOrigText.style.color = currentSettings.originalColor || '#FFFFFF';
     }
 
     if (previewTransText) {
-      previewTransText.style.fontSize = `${currentSettings.fontSize}px`;
+      previewTransText.style.fontSize = `${effectiveFs}px`;
       previewTransText.style.color = currentSettings.fontColor || '#FFFFFF';
     }
 
@@ -221,6 +298,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         sliderFontSize.value = currentSettings.fontSize;
         if (fontSizeVal) fontSizeVal.textContent = `${currentSettings.fontSize}px`;
       }
+
+      if (toggleFullscreenOptimize) toggleFullscreenOptimize.checked = currentSettings.fullscreenOptimize !== false;
+      if (selectFullscreenMode) selectFullscreenMode.value = currentSettings.fullscreenScaleMode || 'sync_yt';
+      if (sliderFullscreenSize) {
+        sliderFullscreenSize.value = currentSettings.fullscreenCustomSize || 32;
+        if (fullscreenSizeVal) fullscreenSizeVal.textContent = `${currentSettings.fullscreenCustomSize || 32}px`;
+      }
+      updateFullscreenUI();
 
       if (sliderBgOpacity) {
         sliderBgOpacity.value = currentSettings.bgOpacity;
@@ -314,8 +399,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     sliderFontSize.addEventListener('input', () => {
       currentSettings.fontSize = parseInt(sliderFontSize.value, 10);
       if (fontSizeVal) fontSizeVal.textContent = `${currentSettings.fontSize}px`;
+      updateFullscreenUI();
       updatePreview();
       saveSettings(false);
+    });
+  }
+
+  if (toggleFullscreenOptimize) {
+    toggleFullscreenOptimize.addEventListener('change', () => {
+      currentSettings.fullscreenOptimize = toggleFullscreenOptimize.checked;
+      updateFullscreenUI();
+      saveSettings(true);
+      updatePreview();
+    });
+  }
+
+  if (selectFullscreenMode) {
+    selectFullscreenMode.addEventListener('change', () => {
+      currentSettings.fullscreenScaleMode = selectFullscreenMode.value;
+      updateFullscreenUI();
+      saveSettings(true);
+      updatePreview();
+    });
+  }
+
+  if (sliderFullscreenSize) {
+    sliderFullscreenSize.addEventListener('input', () => {
+      const val = parseInt(sliderFullscreenSize.value, 10);
+      currentSettings.fullscreenCustomSize = val;
+      if (fullscreenSizeVal) fullscreenSizeVal.textContent = `${val}px`;
+      updateFullscreenUI();
+      saveSettings(false);
+      updatePreview();
+    });
+  }
+
+  if (btnPreviewFs) {
+    btnPreviewFs.addEventListener('click', () => {
+      isPreviewFullscreen = !isPreviewFullscreen;
+      btnPreviewFs.textContent = isPreviewFullscreen ? 'Toàn màn hình: Bật' : 'Toàn màn hình: Tắt';
+      btnPreviewFs.classList.toggle('active', isPreviewFullscreen);
+      updatePreview();
     });
   }
 

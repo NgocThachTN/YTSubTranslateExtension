@@ -18,6 +18,9 @@
     sourceLang: 'auto',
     targetLang: 'vi',
     fontSize: 20,
+    fullscreenOptimize: true, // Auto-scale subtitle size in fullscreen mode
+    fullscreenScaleMode: 'sync_yt', // 'sync_yt' | '1.25' | '1.4' | '1.5' | '1.75' | '2.0' | 'custom'
+    fullscreenCustomSize: 32, // Custom font size when mode is 'custom'
     fontColor: '#FFFFFF',
     originalColor: '#FFFFFF',
     bgOpacity: 75,
@@ -42,7 +45,6 @@
   // State variables
   let playerElement = null;
   let captionObserver = null;
-  let playerObserver = null;
   let lastCaptionText = '';
   let overlayContainer = null;
   let innerBox = null;
@@ -222,16 +224,23 @@
 
     if (isSameAsTarget) {
       // Subtitle is already in target language: Let YouTube display its native caption!
-      playerElement.classList.remove('ytsub-hide-native');
-      if (innerBox) {
+      if (playerElement.classList.contains('ytsub-hide-native')) {
+        playerElement.classList.remove('ytsub-hide-native');
+      }
+      if (innerBox && !innerBox.classList.contains('ytsub-hidden')) {
         innerBox.classList.add('ytsub-hidden');
       }
     } else {
       // Different language: Hide native caption if configured, show custom translator overlay
-      if (settings.enabled && settings.displayMode !== 'off' && settings.hideOriginalNative) {
-        playerElement.classList.add('ytsub-hide-native');
+      const shouldHide = settings.enabled && settings.displayMode !== 'off' && settings.hideOriginalNative;
+      if (shouldHide) {
+        if (!playerElement.classList.contains('ytsub-hide-native')) {
+          playerElement.classList.add('ytsub-hide-native');
+        }
       } else {
-        playerElement.classList.remove('ytsub-hide-native');
+        if (playerElement.classList.contains('ytsub-hide-native')) {
+          playerElement.classList.remove('ytsub-hide-native');
+        }
       }
     }
   }
@@ -634,6 +643,113 @@
     }
   }
 
+  let lastAppliedFontSize = 0;
+  let cachedNativeFs = 0;
+  let lastNativeFsCheck = 0;
+
+  /**
+   * Check if YouTube player or page is in fullscreen mode
+   */
+  function isPlayerFullscreen() {
+    if (playerElement && playerElement.classList.contains('ytp-fullscreen')) {
+      return true;
+    }
+    if (document.fullscreenElement) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Inspect YouTube's native subtitle elements to read its authentic font size.
+   * Cached for 2s to eliminate layout thrashing and forced reflows.
+   */
+  function getNativeCaptionFontSize() {
+    if (!playerElement) return 0;
+    const now = Date.now();
+    if (cachedNativeFs > 0 && now - lastNativeFsCheck < 2000) {
+      return cachedNativeFs;
+    }
+
+    const container = playerElement.querySelector('.ytp-caption-window-container');
+    if (!container) return cachedNativeFs;
+
+    // Check individual caption segments
+    const segments = container.querySelectorAll('.ytp-caption-segment');
+    for (const seg of segments) {
+      const fs = parseFloat(window.getComputedStyle(seg).fontSize);
+      if (fs && fs >= 12 && fs <= 120) {
+        cachedNativeFs = fs;
+        lastNativeFsCheck = now;
+        return fs;
+      }
+    }
+
+    // Check caption window blocks
+    const windows = container.querySelectorAll('.caption-window');
+    for (const win of windows) {
+      const fs = parseFloat(window.getComputedStyle(win).fontSize);
+      if (fs && fs >= 12 && fs <= 120) {
+        cachedNativeFs = fs;
+        lastNativeFsCheck = now;
+        return fs;
+      }
+    }
+
+    return cachedNativeFs;
+  }
+
+  /**
+   * Dynamically calculate effective font size based on fullscreen state,
+   * player dimensions and user settings (with authentic YouTube native synchronization).
+   */
+  function computeEffectiveFontSize() {
+    const baseFs = Math.max(12, settings.fontSize || 20);
+
+    if (!isPlayerFullscreen() || settings.fullscreenOptimize === false) {
+      return baseFs;
+    }
+
+    const mode = settings.fullscreenScaleMode || 'sync_yt';
+
+    if (mode === 'sync_yt') {
+      const nativeFs = getNativeCaptionFontSize();
+      if (nativeFs > 0) {
+        // Synchronized directly with YouTube native captions
+        if (baseFs === 20) {
+          return Math.round(nativeFs);
+        }
+        // Scale proportionally if user set a non-default base size
+        return Math.max(16, Math.min(80, Math.round(nativeFs * (baseFs / 20))));
+      }
+
+      // Fallback when native CC is inactive or not yet rendered in DOM:
+      // YouTube native subtitle standard size is ~3.0% - 3.2% of player height in fullscreen
+      const playerHeight = (playerElement && playerElement.clientHeight > 0)
+        ? playerElement.clientHeight
+        : (window.innerHeight || 1080);
+
+      const ytStandardFs = Math.max(24, Math.round(playerHeight * 0.0315));
+      if (baseFs === 20) {
+        return ytStandardFs;
+      }
+      return Math.max(16, Math.min(80, Math.round(ytStandardFs * (baseFs / 20))));
+    }
+
+    if (mode === 'custom') {
+      const customFs = settings.fullscreenCustomSize || 32;
+      return Math.max(14, Math.min(80, customFs));
+    }
+
+    // Fixed scale multiplier (e.g. 1.25, 1.4, 1.5, 1.75, 2.0)
+    const factor = parseFloat(mode);
+    if (!isNaN(factor) && factor > 0) {
+      return Math.max(16, Math.min(80, Math.round(baseFs * factor)));
+    }
+
+    return baseFs;
+  }
+
   /**
    * Apply settings to the DOM and overlay
    */
@@ -642,23 +758,30 @@
 
     if (!settings.enabled || settings.displayMode === 'off') {
       overlayContainer.style.display = 'none';
-      document.body.classList.remove('ytsub-active');
-      if (playerElement) {
+      if (document.body && document.body.classList.contains('ytsub-active')) {
+        document.body.classList.remove('ytsub-active');
+      }
+      if (playerElement && playerElement.classList.contains('ytsub-hide-native')) {
         playerElement.classList.remove('ytsub-hide-native');
       }
       return;
     }
 
     overlayContainer.style.display = 'flex';
-    document.body.classList.add('ytsub-active');
+    if (document.body && !document.body.classList.contains('ytsub-active')) {
+      document.body.classList.add('ytsub-active');
+    }
 
     if (playerElement) {
-      if (isTrackMatchingTargetLanguage()) {
-        playerElement.classList.remove('ytsub-hide-native');
-      } else if (settings.hideOriginalNative) {
-        playerElement.classList.add('ytsub-hide-native');
+      const shouldHide = !isTrackMatchingTargetLanguage() && settings.hideOriginalNative;
+      if (shouldHide) {
+        if (!playerElement.classList.contains('ytsub-hide-native')) {
+          playerElement.classList.add('ytsub-hide-native');
+        }
       } else {
-        playerElement.classList.remove('ytsub-hide-native');
+        if (playerElement.classList.contains('ytsub-hide-native')) {
+          playerElement.classList.remove('ytsub-hide-native');
+        }
       }
     }
 
@@ -666,14 +789,22 @@
     const bgVal = `rgba(8, 8, 8, ${(settings.bgOpacity ?? 75) / 100})`;
     innerBox.style.backgroundColor = bgVal;
 
+    // Calculate responsive effective font size
+    const effectiveFontSize = computeEffectiveFontSize();
+    lastAppliedFontSize = effectiveFontSize;
+
+    if (overlayContainer) {
+      overlayContainer.style.setProperty('--ytsub-font-size', `${effectiveFontSize}px`);
+    }
+
     if (originalTextElement) {
-      originalTextElement.style.fontSize = `${Math.round(settings.fontSize * 0.92)}px`;
+      originalTextElement.style.fontSize = `${Math.round(effectiveFontSize * 0.92)}px`;
       originalTextElement.style.color = settings.originalColor || '#FFFFFF';
       originalTextElement.style.backgroundColor = 'transparent';
     }
 
     if (translatedTextElement) {
-      translatedTextElement.style.fontSize = `${settings.fontSize}px`;
+      translatedTextElement.style.fontSize = `${effectiveFontSize}px`;
       translatedTextElement.style.color = settings.fontColor || '#FFFFFF';
       translatedTextElement.style.backgroundColor = 'transparent';
     }
@@ -1204,7 +1335,9 @@
    */
   async function onCaptionsChanged() {
     if (!settings.enabled || settings.displayMode === 'off') {
-      if (innerBox) innerBox.classList.add('ytsub-hidden');
+      if (innerBox && !innerBox.classList.contains('ytsub-hidden')) {
+        innerBox.classList.add('ytsub-hidden');
+      }
       return;
     }
 
@@ -1212,12 +1345,24 @@
 
     if (!currentText) {
       lastCaptionText = '';
-      if (innerBox) {
+      if (innerBox && !innerBox.classList.contains('ytsub-hidden')) {
         innerBox.classList.add('ytsub-hidden');
         if (originalTextElement) originalTextElement.textContent = '';
         if (translatedTextElement) translatedTextElement.textContent = '';
       }
       return;
+    }
+
+    if (currentText === lastCaptionText) {
+      return;
+    }
+
+    // Sync font size if in fullscreen and native caption size changed or became available
+    if (isPlayerFullscreen() && (settings.fullscreenScaleMode || 'sync_yt') === 'sync_yt') {
+      const newFs = computeEffectiveFontSize();
+      if (Math.abs(newFs - lastAppliedFontSize) >= 1) {
+        applySettings();
+      }
     }
 
     // 0. If subtitle already matches target language (e.g. video has Vietnamese captions):
@@ -1661,25 +1806,45 @@
     }
   });
 
+  let playerContainerObserver = null;
+
   /**
-   * Attach MutationObserver to caption container
+   * Attach MutationObserver to caption container exclusively.
+   * Never attaches heavy subtree observers to playerElement to eliminate video lag.
    */
   function observeCaptionContainer() {
     if (captionObserver) {
       captionObserver.disconnect();
       captionObserver = null;
     }
+    if (playerContainerObserver) {
+      playerContainerObserver.disconnect();
+      playerContainerObserver = null;
+    }
 
     if (!playerElement) return;
 
     const captionContainer = playerElement.querySelector('.ytp-caption-window-container');
-    const targetNode = captionContainer || playerElement;
+    if (!captionContainer) {
+      // Shallow observe playerElement with childList: true only (no subtree, no characterData)
+      // solely to detect when .ytp-caption-window-container is created by YouTube
+      playerContainerObserver = new MutationObserver(() => {
+        const found = playerElement.querySelector('.ytp-caption-window-container');
+        if (found) {
+          playerContainerObserver.disconnect();
+          playerContainerObserver = null;
+          observeCaptionContainer();
+        }
+      });
+      playerContainerObserver.observe(playerElement, { childList: true });
+      return;
+    }
 
     captionObserver = new MutationObserver(() => {
       onCaptionsChanged();
     });
 
-    captionObserver.observe(targetNode, {
+    captionObserver.observe(captionContainer, {
       childList: true,
       subtree: true,
       characterData: true,
@@ -1820,10 +1985,25 @@
     prioritizeUpcomingClusters();
   }
 
+  function isWatchOrShortsPage() {
+    const p = window.location.pathname;
+    return p.startsWith('/watch') || p.startsWith('/shorts') || p.startsWith('/live');
+  }
+
   /**
    * Initialize player
    */
   function initPlayer() {
+    if (!isWatchOrShortsPage()) {
+      if (overlayContainer) {
+        overlayContainer.style.display = 'none';
+      }
+      if (playerElement) {
+        playerElement.classList.remove('ytsub-hide-native');
+      }
+      return false;
+    }
+
     const player = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
     if (!player) return false;
 
@@ -1849,16 +2029,40 @@
   function init() {
     loadSettings();
 
-    if (!initPlayer()) {
-      let attempts = 0;
-      const interval = setInterval(() => {
-        attempts++;
-        if (initPlayer() || attempts > 20) {
-          clearInterval(interval);
-        }
-      }, 400);
+    // Listen to standard browser fullscreen and resize events (lightweight, zero thrashing)
+    document.addEventListener('fullscreenchange', () => {
+      cachedNativeFs = 0;
+      applySettings();
+      setTimeout(applySettings, 150);
+    });
+    document.addEventListener('webkitfullscreenchange', () => {
+      cachedNativeFs = 0;
+      applySettings();
+      setTimeout(applySettings, 150);
+    });
+
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        cachedNativeFs = 0;
+        applySettings();
+      }, 200);
+    });
+
+    if (isWatchOrShortsPage()) {
+      if (!initPlayer()) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          if (initPlayer() || attempts >= 10 || !isWatchOrShortsPage()) {
+            clearInterval(interval);
+          }
+        }, 300);
+      }
     }
 
+    // YouTube SPA navigation events
     window.addEventListener('yt-navigate-finish', () => {
       lastCaptionText = '';
       detectedCaptionLang = '';
@@ -1869,10 +2073,13 @@
       videoTimedCues = [];
       pretranslateQueue = [];
       lastTranslatedTail = [];
+      cachedNativeFs = 0;
       if (playerElement) {
         playerElement.classList.remove('ytsub-hide-native');
       }
-      setTimeout(() => initPlayer(), 200);
+      if (isWatchOrShortsPage()) {
+        setTimeout(() => initPlayer(), 150);
+      }
     });
 
     window.addEventListener('spfdone', () => {
@@ -1885,21 +2092,14 @@
       videoTimedCues = [];
       pretranslateQueue = [];
       lastTranslatedTail = [];
+      cachedNativeFs = 0;
       if (playerElement) {
         playerElement.classList.remove('ytsub-hide-native');
       }
-      setTimeout(() => initPlayer(), 200);
+      if (isWatchOrShortsPage()) {
+        setTimeout(() => initPlayer(), 150);
+      }
     });
-
-    if (!playerObserver) {
-      playerObserver = new MutationObserver(() => {
-        const player = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
-        if (player && player !== playerElement) {
-          initPlayer();
-        }
-      });
-      playerObserver.observe(document.body, { childList: true, subtree: true });
-    }
   }
 
   chrome.storage.onChanged.addListener((changes, namespace) => {

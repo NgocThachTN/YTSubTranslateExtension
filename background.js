@@ -16,6 +16,9 @@ const DEFAULT_SETTINGS = {
   sourceLang: 'auto',
   targetLang: 'vi',
   fontSize: 20,
+  fullscreenOptimize: true, // Auto-scale subtitle size in fullscreen mode
+  fullscreenScaleMode: 'sync_yt', // 'sync_yt' | '1.25' | '1.4' | '1.5' | '1.75' | '2.0' | 'custom'
+  fullscreenCustomSize: 32, // Custom font size when mode is 'custom'
   fontColor: '#FFFFFF', // Clean white matching native YouTube subtitle color
   originalColor: '#FFFFFF', // Soft light gray/white for original subtitle in bilingual mode
   bgOpacity: 75, // 75% dark backdrop (YouTube native standard)

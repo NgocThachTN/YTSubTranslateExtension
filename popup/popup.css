@@ -572,9 +572,30 @@ body::-webkit-scrollbar-thumb {
   margin-top: 6px;
 }
 
+.preview-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .preview-area-label {
   font-size: 11.5px;
   color: var(--text-sub);
+}
+
+.btn-preview-toggle {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-preview-toggle.active {
+  background: rgba(229, 57, 53, 0.15);
+  color: #ff6b6b;
+  border-color: rgba(229, 57, 53, 0.4);
+  font-weight: 500;
 }
 
 .preview-display-stage {
