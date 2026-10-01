@@ -191,18 +191,7 @@ document.addEventListener('DOMContentLoaded', async () => {
    * Fetch cache statistics from background
    */
   function queryCacheStats() {
-    chrome.runtime.sendMessage({ action: 'GET_CACHE_STATS' }, (res) => {
-      if (res && res.success) {
-        const count = res.size || 0;
-        if (statCacheCount) {
-          statCacheCount.textContent = count.toLocaleString('vi-VN');
-        }
-        if (statCacheSize) {
-          const estimatedKb = ((count * 180) / 1024).toFixed(2);
-          statCacheSize.textContent = `${estimatedKb} KB`;
-        }
-      }
-    });
+    // Stat elements removed for clean UI
   }
 
   /**
@@ -261,12 +250,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Set Update controls
       if (inputGithubRepo) inputGithubRepo.value = currentSettings.githubRepo || 'NgocThachTN/YTSubTranslateExtension';
 
+      updateActiveServiceDisplay();
       updatePreview();
       queryCacheStats();
       loadQuotaStats();
     } catch (err) {
       console.error('Failed to load settings:', err);
     }
+  }
+
+  function updateActiveServiceDisplay() {
+    const el = document.getElementById('stat-lang-service-name');
+    if (!el) return;
+    const names = {
+      google: 'Google Translate API',
+      gemini: 'Google Gemini AI',
+      youtube: 'YouTube Subtitles Native',
+      mymemory: 'MyMemory Translated API',
+      google_cloud: 'Google Cloud Translation API',
+    };
+    el.textContent = names[currentSettings.translationService] || 'Google Translate API';
   }
 
   // Event Listeners
@@ -281,6 +284,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     selectTranslationService.addEventListener('change', () => {
       currentSettings.translationService = selectTranslationService.value;
       saveSettings(true);
+      updateActiveServiceDisplay();
       if (selectTranslationService.value === 'gemini' && !currentSettings.geminiApiKey) {
         showToast('Vui lòng nhập Gemini API Key trong tab Nâng cao');
         const advBtn = document.querySelector('.tab-btn[data-tab="tab-advanced"]');

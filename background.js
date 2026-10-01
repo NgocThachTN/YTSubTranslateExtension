@@ -1141,6 +1141,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'CLEAR_CACHE') {
     translationCache.clear();
     videoRoleAnchor.clear();
+    chrome.tabs.query({ url: '*://*.youtube.com/*' }, (tabs) => {
+      if (tabs && tabs.length > 0) {
+        tabs.forEach((tab) => {
+          chrome.tabs.sendMessage(tab.id, { action: 'CLEAR_LOCAL_CACHE' }).catch(() => {});
+        });
+      }
+    });
     sendResponse({ success: true, count: 0 });
     return true;
   }

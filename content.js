@@ -1646,6 +1646,16 @@
     }
   });
 
+  chrome.runtime.onMessage.addListener((request) => {
+    if (request && request.action === 'CLEAR_LOCAL_CACHE') {
+      localCache.clear();
+      lastCaptionText = '';
+      lastTranslatedTail = [];
+      console.log('[YT ViSub] Local memory cache cleared.');
+      onCaptionsChanged();
+    }
+  });
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

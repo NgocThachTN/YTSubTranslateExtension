@@ -116,32 +116,16 @@
 
             <!-- Row: Xóa bộ nhớ đệm -->
             <div class="setting-row">
-              <span class="row-label">Bộ nhớ đệm</span>
+              <div class="row-text-group">
+                <span class="row-label">Bộ nhớ đệm</span>
+                <span class="row-sublabel">Xóa các câu đã lưu tạm để làm mới bản dịch theo cài đặt mới</span>
+              </div>
               <button type="button" id="btn-clear-cache" class="btn-danger-pill">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                   <path d="M19 4h-3.5l-1-1h-5l-1 1H5v2h14M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12z"/>
                 </svg>
                 Xóa bộ nhớ đệm
               </button>
-            </div>
-
-            <!-- Inset Stats Box (Exact Better Lyrics styling) -->
-            <div class="stats-inset-box">
-              <div class="stats-line">
-                <span class="stats-title">Toàn bộ câu phụ đề đã được lưu vào bộ nhớ đệm</span>
-                <span class="stats-dots"></span>
-                <span id="stat-cache-count" class="stats-value">0</span>
-              </div>
-              <div class="stats-line">
-                <span class="stats-title">Dung lượng bộ nhớ đệm ước tính</span>
-                <span class="stats-dots"></span>
-                <span id="stat-cache-size" class="stats-value">0.00 KB</span>
-              </div>
-              <div class="stats-line">
-                <span class="stats-title">Độ trễ hiển thị phụ đề</span>
-                <span class="stats-dots"></span>
-                <span class="stats-value text-accent">Tức thì (0ms)</span>
-              </div>
             </div>
 
           </div>
@@ -283,7 +267,7 @@
               <div class="stats-line">
                 <span class="stats-title">Phương thức dịch</span>
                 <span class="stats-dots"></span>
-                <span class="stats-value">Google Translate API</span>
+                <span id="stat-lang-service-name" class="stats-value">Google Translate API</span>
               </div>
               <div class="stats-line">
                 <span class="stats-title">Định dạng kết quả</span>
