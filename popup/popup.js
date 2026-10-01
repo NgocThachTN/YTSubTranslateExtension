@@ -255,7 +255,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Set Advanced controls
       if (inputGeminiKey) inputGeminiKey.value = currentSettings.geminiApiKey || '';
       if (selectGeminiModel) selectGeminiModel.value = currentSettings.geminiModel || 'gemini-3.5-flash-lite';
-      if (selectGeminiRpd) selectGeminiRpd.value = String(currentSettings.geminiRpdLimit || 500);
       if (selectGeminiStyle) selectGeminiStyle.value = currentSettings.geminiStyle || 'auto';
       if (selectGeminiPronoun) selectGeminiPronoun.value = currentSettings.geminiPronounRole || 'auto';
 
@@ -399,14 +398,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  if (selectGeminiRpd) {
-    selectGeminiRpd.addEventListener('change', () => {
-      currentSettings.geminiRpdLimit = parseInt(selectGeminiRpd.value, 10) || 500;
-      saveSettings(true);
-      loadQuotaStats();
-    });
-  }
-
   if (selectGeminiStyle) {
     selectGeminiStyle.addEventListener('change', () => {
       currentSettings.geminiStyle = selectGeminiStyle.value;
@@ -515,7 +506,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const rawKeys = (currentSettings.geminiApiKey || '').trim();
       const keys = rawKeys.split(/[\n,;]+/).map((k) => k.trim()).filter((k) => k.length > 10);
       const keyCount = Math.max(1, keys.length);
-      const baseRpd = currentSettings.geminiRpdLimit || 500;
+      const baseRpd = 500;
       const maxRpd = keyCount * baseRpd;
       const maxRpm = keyCount * 15;
 
@@ -535,6 +526,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         requestsToday = (data.gemini_requests_date === today) ? (data.gemini_requests_today || 0) : 0;
       }
       const remainingRpd = Math.max(0, maxRpd - requestsToday);
+      const cuesTranslated = data.gemini_cues_translated || 0;
+      const quotaSaved = data.gemini_quota_saved || 0;
 
       if (statRequestsToday) statRequestsToday.textContent = `${requestsToday.toLocaleString()} / ${maxRpd.toLocaleString()}`;
       if (statRequestsRemaining) statRequestsRemaining.textContent = remainingRpd.toLocaleString();
@@ -542,23 +535,45 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (statQuotaSaved) statQuotaSaved.textContent = `${quotaSaved.toLocaleString()} câu`;
       if (statPacingSpeed) statPacingSpeed.textContent = `≤ ${maxRpm} RPM`;
 
-      const usedPct = Math.min(100, Math.round((requestsToday / maxRpd) * 100));
-      const remainingPct = Math.max(0, 100 - usedPct);
+      // Calculate exact percentage for usage and remaining
+      const rawUsedPct = maxRpd > 0 ? (requestsToday / maxRpd) * 100 : 0;
+      let usedPctText = '0%';
+      if (requestsToday === 0) {
+        usedPctText = '0%';
+      } else if (rawUsedPct < 1) {
+        usedPctText = `${rawUsedPct.toFixed(1)}%`;
+      } else {
+        usedPctText = `${Math.round(rawUsedPct)}%`;
+      }
 
+      const rawRemPct = maxRpd > 0 ? (remainingRpd / maxRpd) * 100 : 0;
+      let remPctText = '100%';
+      if (remainingRpd === 0) {
+        remPctText = '0%';
+      } else if (remainingRpd === maxRpd) {
+        remPctText = '100%';
+      } else if (rawRemPct > 99 && rawRemPct < 100) {
+        remPctText = `${rawRemPct.toFixed(1)}%`;
+      } else {
+        remPctText = `${Math.round(rawRemPct)}%`;
+      }
+
+      // Visual progress bar fill (at least 1.5% width so 1 request is visibly visible)
+      const fillPct = Math.min(100, Math.max(requestsToday > 0 ? 1.5 : 0, rawUsedPct));
       if (quotaProgressFill) {
-        quotaProgressFill.style.width = `${usedPct}%`;
-        if (usedPct >= 90) {
+        quotaProgressFill.style.width = `${fillPct}%`;
+        if (rawUsedPct >= 90) {
           quotaProgressFill.style.background = 'linear-gradient(90deg, #f59e0b, #ef4444)';
         } else {
           quotaProgressFill.style.background = 'linear-gradient(90deg, #3b82f6, var(--accent-green))';
         }
       }
-      if (quotaUsagePercent) quotaUsagePercent.textContent = `${usedPct}%`;
+      if (quotaUsagePercent) quotaUsagePercent.textContent = usedPctText;
       if (quotaRemainingPercent) {
-        quotaRemainingPercent.textContent = `${remainingPct}%`;
-        if (remainingPct <= 10) {
+        quotaRemainingPercent.textContent = remPctText;
+        if (rawRemPct <= 10) {
           quotaRemainingPercent.className = 'quota-percent-pill danger';
-        } else if (remainingPct <= 25) {
+        } else if (rawRemPct <= 25) {
           quotaRemainingPercent.className = 'quota-percent-pill warning';
         } else {
           quotaRemainingPercent.className = 'quota-percent-pill success';
