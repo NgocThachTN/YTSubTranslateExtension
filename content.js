@@ -64,6 +64,41 @@
   let videoTimedCues = []; // Chronological list of { startMs, durMs, text }
   let attachedVideoElement = null;
   let lastTranslatedTail = []; // Rolling context tail: [{ original, translation }] to connect subsequent batches
+  let currentSongPronounRole = 'auto'; // 'auto' | 'female' | 'male' - Session-locked song pronoun perspective
+
+  /**
+   * Intelligently select preceding cues containing personal pronouns for seamless context flow
+   */
+  function getSmartContextTail(tailList = [], maxItems = 2) {
+    if (!Array.isArray(tailList) || tailList.length === 0) return [];
+    const valid = tailList.filter((t) => t && t.original && t.translation && t.translation.trim().length > 3);
+    if (valid.length === 0) return [];
+
+    const pronounRegex = /\b(em|anh|tôi|mình|tớ|cậu|bạn|chúng ta|đôi ta)\b/i;
+    const withPronouns = valid.filter((t) => pronounRegex.test(t.translation));
+    if (withPronouns.length > 0) {
+      return withPronouns.slice(-maxItems);
+    }
+    return valid.slice(-maxItems);
+  }
+
+  /**
+   * Automatically detect and anchor song pronoun role upon first translated cue/batch
+   */
+  function updateSongPronounRoleFromTranslations(translations) {
+    if (currentSongPronounRole !== 'auto') return;
+    const combined = (Array.isArray(translations) ? translations.join(' ') : (translations || '')).toLowerCase();
+    const femaleSignals = (combined.match(/\b(em yêu anh|em nhớ anh|nhớ anh|yêu anh|bên anh|gần anh|đợi anh|chờ anh|cần anh|vì anh|với anh|của anh|anh ơi|cho em|với em|của em|chính em|bản thân em|em nghĩ|em thấy|em muốn|em biết|em khóc|em mơ|em sợ|em bước|em đau|em chẳng|em không|em đã|em sẽ|em quay về|em ra đi|em buông tay|cô gái|nàng thơ)\b/g) || []).length;
+    const maleSignals = (combined.match(/\b(anh yêu em|anh nhớ em|nhớ em|yêu em|bên em|gần em|đợi em|chờ em|cần em|vì em|với em|của em|em ơi|cho anh|với anh|của anh|chính anh|bản thân anh|anh nghĩ|anh thấy|anh muốn|anh biết|anh khóc|anh mơ|anh sợ|anh bước|anh đau|anh chẳng|anh không|anh đã|anh sẽ|anh quay về|anh ra đi|anh buông tay|chàng trai)\b/g) || []).length;
+
+    if (femaleSignals > 0 && femaleSignals >= maleSignals) {
+      currentSongPronounRole = 'female';
+      console.log('[YT ViSub] [Gemini Pronoun Lock] Anchored song perspective to FEMALE (Em - Anh).');
+    } else if (maleSignals > 0 && maleSignals > femaleSignals) {
+      currentSongPronounRole = 'male';
+      console.log('[YT ViSub] [Gemini Pronoun Lock] Anchored song perspective to MALE (Anh - Em).');
+    }
+  }
 
   /**
    * Get current video playback time in milliseconds
@@ -268,8 +303,12 @@
 
       if (trans && trans !== c.text) {
         nativeTranslationsByText.set(c.text, trans);
-        localCache.set(getCacheKey(settings.translationService, sl, tl, c.text), trans);
-        localCache.set(getCacheKey('gemini', sl, tl, c.text), trans);
+        // CRITICAL: When user selects Gemini AI, NEVER poison Gemini cache with raw machine YouTube translations!
+        // Gemini AI will translate with rich poetic emotion and consistent pronouns.
+        if (settings.translationService !== 'gemini') {
+          localCache.set(getCacheKey(settings.translationService, sl, tl, c.text), trans);
+          localCache.set(getCacheKey('gemini', sl, tl, c.text), trans);
+        }
         localCache.set(getCacheKey('google', sl, tl, c.text), trans);
         localCache.set(getCacheKey('youtube', sl, tl, c.text), trans);
         countMatched++;
@@ -1187,6 +1226,10 @@
           ? (settings.geminiApiKey || '')
           : (settings.customApiKey || '');
 
+        const effectivePronoun = currentSongPronounRole !== 'auto'
+          ? currentSongPronounRole
+          : (settings.geminiPronounRole || 'auto');
+
         const response = await chrome.runtime.sendMessage({
           action: 'TRANSLATE',
           text: trimmed,
@@ -1197,11 +1240,14 @@
           model: settings.geminiModel || 'gemini-3.5-flash-lite',
           videoTitle: getVideoContext(),
           style: settings.geminiStyle || 'auto',
-          pronounRole: settings.geminiPronounRole || 'auto',
+          pronounRole: effectivePronoun,
+          contextTail: getSmartContextTail(lastTranslatedTail, 2),
         });
 
         if (response && response.success && response.translation) {
           translated = response.translation;
+          updateSongPronounRoleFromTranslations(translated);
+          lastTranslatedTail = [...lastTranslatedTail, { original: trimmed, translation: translated }].slice(-10);
         }
       } catch (err) {
         console.warn('[YT ViSub] Translation message failed:', err);
@@ -1395,15 +1441,15 @@
     }
 
     // 1. Check local synchronous cache (0ms instant return - atomic simultaneous display)
-    const cached = localCache.get(cacheKey) || localCache.get(getCacheKey('gemini', settings.sourceLang, settings.targetLang, currentText));
+    const cached = localCache.get(cacheKey) || (service !== 'gemini' ? localCache.get(getCacheKey('gemini', settings.sourceLang, settings.targetLang, currentText)) : null);
 
     if (cached) {
       renderSubtitlesSimultaneously(currentText, cached);
       return;
     }
 
-    // 1.1 Check native pre-translated cues from YouTube
-    if (nativeTranslationsByText.has(currentText)) {
+    // 1.1 Check native pre-translated cues from YouTube (Only for non-Gemini services)
+    if (service !== 'gemini' && nativeTranslationsByText.has(currentText)) {
       const nativeTrans = nativeTranslationsByText.get(currentText);
       localCache.set(cacheKey, nativeTrans);
       renderSubtitlesSimultaneously(currentText, nativeTrans);
@@ -1589,8 +1635,10 @@
               nativeTranslationsByMs.set(startMs, transText);
 
               // Cache transText -> transText so we never re-translate already translated subtitles
-              localCache.set(getCacheKey(settings.translationService, sl, tl, transText), transText);
-              localCache.set(getCacheKey('gemini', sl, tl, transText), transText);
+              if (settings.translationService !== 'gemini') {
+                localCache.set(getCacheKey(settings.translationService, sl, tl, transText), transText);
+                localCache.set(getCacheKey('gemini', sl, tl, transText), transText);
+              }
               countLoaded++;
             }
           }
@@ -1676,6 +1724,10 @@
           lastGeminiBatchTime = Date.now();
 
           try {
+            const effectivePronoun = currentSongPronounRole !== 'auto'
+              ? currentSongPronounRole
+              : currentPronoun;
+
             const response = await chrome.runtime.sendMessage({
               action: 'TRANSLATE_BATCH_GEMINI',
               lines: toTranslate,
@@ -1685,11 +1737,12 @@
               model: settings.geminiModel || 'gemini-3.5-flash-lite',
               videoTitle: currentContext,
               style: currentStyle,
-              pronounRole: currentPronoun,
-              contextTail: lastTranslatedTail.slice(-2),
+              pronounRole: effectivePronoun,
+              contextTail: getSmartContextTail(lastTranslatedTail, 2),
             });
 
             if (response && response.success && Array.isArray(response.translations)) {
+              updateSongPronounRoleFromTranslations(response.translations);
               const newTail = [];
               toTranslate.forEach((orig, idx) => {
                 const trans = (response.translations[idx] || '').trim();
@@ -1699,7 +1752,7 @@
                 }
               });
               if (newTail.length > 0) {
-                lastTranslatedTail = newTail.slice(-2);
+                lastTranslatedTail = [...lastTranslatedTail, ...newTail].slice(-10);
               }
               console.log(`[YT ViSub] [Gemini Full-Video] Translated ${toTranslate.length} cues into cache. Remaining in queue: ${pretranslateQueue.length}`);
             } else if (response && response.error && response.error.includes('429')) {
@@ -1879,7 +1932,7 @@
     // Retrieve preceding cue before targetTimeMs as context tail for seamless seeking
     let expressTail = [];
     if (lastTranslatedTail && lastTranslatedTail.length > 0) {
-      expressTail = lastTranslatedTail.slice(-2);
+      expressTail = getSmartContextTail(lastTranslatedTail, 2);
     } else {
       const priorCue = videoTimedCues
         .filter((c) => c.startMs < targetTimeMs)
@@ -1893,6 +1946,10 @@
     }
 
     try {
+      const effectivePronoun = currentSongPronounRole !== 'auto'
+        ? currentSongPronounRole
+        : (settings.geminiPronounRole || 'auto');
+
       const response = await chrome.runtime.sendMessage({
         action: 'TRANSLATE_BATCH_GEMINI',
         lines: uniqueUrgent,
@@ -1902,11 +1959,12 @@
         model: settings.geminiModel || 'gemini-3.5-flash-lite',
         videoTitle: getVideoContext(),
         style: settings.geminiStyle || 'auto',
-        pronounRole: settings.geminiPronounRole || 'auto',
+        pronounRole: effectivePronoun,
         contextTail: expressTail,
       });
 
       if (response && response.success && Array.isArray(response.translations)) {
+        updateSongPronounRoleFromTranslations(response.translations);
         const newTail = [];
         uniqueUrgent.forEach((orig, idx) => {
           const trans = (response.translations[idx] || '').trim();
@@ -1916,7 +1974,7 @@
           }
         });
         if (newTail.length > 0) {
-          lastTranslatedTail = newTail.slice(-2);
+          lastTranslatedTail = [...lastTranslatedTail, ...newTail].slice(-10);
         }
 
         // Upgrade active subtitle if it matches any translated cue
@@ -2073,6 +2131,7 @@
       videoTimedCues = [];
       pretranslateQueue = [];
       lastTranslatedTail = [];
+      currentSongPronounRole = 'auto';
       cachedNativeFs = 0;
       if (playerElement) {
         playerElement.classList.remove('ytsub-hide-native');
@@ -2092,6 +2151,7 @@
       videoTimedCues = [];
       pretranslateQueue = [];
       lastTranslatedTail = [];
+      currentSongPronounRole = 'auto';
       cachedNativeFs = 0;
       if (playerElement) {
         playerElement.classList.remove('ytsub-hide-native');
@@ -2113,6 +2173,7 @@
       }
       if (serviceOrKeyChanged) {
         localCache.clear();
+        currentSongPronounRole = 'auto';
         console.log('[YT ViSub] Service or key updated. Local cache cleared. Active service:', settings.translationService);
       }
       applySettings();
@@ -2129,6 +2190,7 @@
       localCache.clear();
       lastCaptionText = '';
       lastTranslatedTail = [];
+      currentSongPronounRole = 'auto';
       console.log('[YT ViSub] Local memory cache cleared.');
       onCaptionsChanged();
     }

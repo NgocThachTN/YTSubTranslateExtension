@@ -341,6 +341,21 @@ function detectFigureGender(videoContext = '') {
 const videoRoleAnchor = new Map();
 const MAX_ANCHOR_CACHE = 1000;
 
+// Restore cached video anchors from session storage upon service worker startup
+try {
+  if (chrome.storage && chrome.storage.session) {
+    chrome.storage.session.get(null).then((items) => {
+      if (items) {
+        for (const [k, v] of Object.entries(items)) {
+          if (k.startsWith('role_') && typeof v === 'string') {
+            videoRoleAnchor.set(k.slice(5), v);
+          }
+        }
+      }
+    }).catch(() => {});
+  }
+} catch (_) {}
+
 function getVideoAnchorKey(videoContext = '') {
   if (!videoContext) return 'default';
   const match = videoContext.match(/Title:\s*([^\|]+)/i) || videoContext.match(/Artist:\s*([^\|]+)/i) || videoContext.match(/Show:\s*([^\|]+)/i);
@@ -354,7 +369,7 @@ function resolveSongPronounRole(requestedRole, videoTitle, effectiveGenre = 'lyr
   }
 
   const key = getVideoAnchorKey(videoTitle);
-  if (videoRoleAnchor.has(key)) {
+  if (videoRoleAnchor.has(key) && videoRoleAnchor.get(key) !== 'auto') {
     return videoRoleAnchor.get(key);
   }
 
@@ -364,6 +379,11 @@ function resolveSongPronounRole(requestedRole, videoTitle, effectiveGenre = 'lyr
       videoRoleAnchor.delete(videoRoleAnchor.keys().next().value);
     }
     videoRoleAnchor.set(key, detected);
+    try {
+      if (chrome.storage && chrome.storage.session) {
+        chrome.storage.session.set({ [`role_${key}`]: detected }).catch(() => {});
+      }
+    } catch (_) {}
     return detected;
   }
 
@@ -372,14 +392,32 @@ function resolveSongPronounRole(requestedRole, videoTitle, effectiveGenre = 'lyr
 
 function anchorRoleFromTranslation(videoTitle, translatedText) {
   const key = getVideoAnchorKey(videoTitle);
-  if (!key || videoRoleAnchor.has(key)) return;
+  if (!key) return;
+  if (videoRoleAnchor.has(key) && videoRoleAnchor.get(key) !== 'auto') return;
+
   const text = (translatedText || '').toLowerCase();
-  const femaleSignals = (text.match(/\b(em|của em|với em|cho em|chính em|bên em|em nhớ anh|em yêu anh|anh ơi)\b/g) || []).length;
-  const maleSignals = (text.match(/\b(anh|của anh|với anh|cho anh|chính anh|bên anh|anh nhớ em|anh yêu em|em ơi)\b/g) || []).length;
+  // Female singer signals (xưng em, gọi anh hoặc tâm sự phái nữ)
+  const femaleSignals = (text.match(/\b(em yêu anh|em nhớ anh|nhớ anh|yêu anh|bên anh|gần anh|đợi anh|chờ anh|cần anh|vì anh|với anh|của anh|anh ơi|cho em|với em|của em|chính em|bản thân em|em nghĩ|em thấy|em muốn|em biết|em khóc|em mơ|em sợ|em bước|em đau|em chẳng|em không|em đã|em sẽ|em quay về|em ra đi|em buông tay|cô gái|nàng thơ|cô ấy)\b/g) || []).length;
+  // Male singer signals (xưng anh, gọi em hoặc tâm sự phái nam)
+  const maleSignals = (text.match(/\b(anh yêu em|anh nhớ em|nhớ em|yêu em|bên em|gần em|đợi em|chờ em|cần em|vì em|với em|của em|em ơi|cho anh|với anh|của anh|chính anh|bản thân anh|anh nghĩ|anh thấy|anh muốn|anh biết|anh khóc|anh mơ|anh sợ|anh bước|anh đau|anh chẳng|anh không|anh đã|anh sẽ|anh quay về|anh ra đi|anh buông tay|chàng trai|anh ấy)\b/g) || []).length;
+
+  let chosenRole = '';
   if (femaleSignals > 0 && femaleSignals >= maleSignals) {
-    videoRoleAnchor.set(key, 'female');
+    chosenRole = 'female';
   } else if (maleSignals > 0 && maleSignals > femaleSignals) {
-    videoRoleAnchor.set(key, 'male');
+    chosenRole = 'male';
+  }
+
+  if (chosenRole) {
+    if (videoRoleAnchor.size >= MAX_ANCHOR_CACHE) {
+      videoRoleAnchor.delete(videoRoleAnchor.keys().next().value);
+    }
+    videoRoleAnchor.set(key, chosenRole);
+    try {
+      if (chrome.storage && chrome.storage.session) {
+        chrome.storage.session.set({ [`role_${key}`]: chosenRole }).catch(() => {});
+      }
+    } catch (_) {}
   }
 }
 
@@ -440,7 +478,8 @@ function updatePronounSummaryFromTranslation(videoTitle, translatedBatchText, ef
 }
 
 /**
- * Sanitize and enforce genre-specific pronoun consistency on translated Vietnamese output
+ * Sanitize output: Filter profanity and dynamically anchor song perspective
+ * Note: Pronoun translation is handled 100% naturally by Gemini AI via prompts
  */
 function cleanOutputByGenre(text, effectiveGenre, role, videoTitle = '') {
   if (!text || typeof text !== 'string') return text;
@@ -457,6 +496,7 @@ function cleanOutputByGenre(text, effectiveGenre, role, videoTitle = '') {
       if (detected) {
         effectiveRole = detected;
         videoRoleAnchor.set(key, detected);
+        try { if (chrome.storage && chrome.storage.session) chrome.storage.session.set({ [`role_${key}`]: detected }).catch(() => {}); } catch (_) {}
       }
     }
   }
@@ -464,17 +504,26 @@ function cleanOutputByGenre(text, effectiveGenre, role, videoTitle = '') {
   // If still auto for lyrics, dynamically deduce and anchor from line content
   if (effectiveGenre === 'lyrics' && (!effectiveRole || effectiveRole === 'auto')) {
     const textLower = cleaned.toLowerCase();
-    if (/\b(em yêu anh|em nhớ anh|bên anh|anh ơi|cho em|với em)\b/.test(textLower)) {
+    const femaleMatch = /\b(em yêu anh|em nhớ anh|nhớ anh|yêu anh|bên anh|gần anh|đợi anh|chờ anh|cần anh|vì anh|với anh|của anh|anh ơi|cho em|với em|của em|chính em|bản thân em|em nghĩ|em thấy|em muốn|em biết|em khóc|em mơ|em sợ|em bước|em đau|em chẳng|em không|em đã|em sẽ)\b/.test(textLower);
+    const maleMatch = /\b(anh yêu em|anh nhớ em|nhớ em|yêu em|bên em|gần em|đợi em|chờ em|cần em|vì em|với em|của em|em ơi|cho anh|với anh|của anh|chính anh|bản thân anh|anh nghĩ|anh thấy|anh muốn|anh biết|anh khóc|anh mơ|anh sợ|anh bước|anh đau|anh chẳng|anh không|anh đã|anh sẽ)\b/.test(textLower);
+
+    if (femaleMatch && !maleMatch) {
       effectiveRole = 'female';
-      if (key) videoRoleAnchor.set(key, 'female');
-    } else if (/\b(anh yêu em|anh nhớ em|bên em|em ơi|cho anh|với anh)\b/.test(textLower)) {
+      if (key) {
+        videoRoleAnchor.set(key, 'female');
+        try { if (chrome.storage && chrome.storage.session) chrome.storage.session.set({ [`role_${key}`]: 'female' }).catch(() => {}); } catch (_) {}
+      }
+    } else if (maleMatch && !femaleMatch) {
       effectiveRole = 'male';
-      if (key) videoRoleAnchor.set(key, 'male');
+      if (key) {
+        videoRoleAnchor.set(key, 'male');
+        try { if (chrome.storage && chrome.storage.session) chrome.storage.session.set({ [`role_${key}`]: 'male' }).catch(() => {}); } catch (_) {}
+      }
     }
   }
 
   if (effectiveGenre === 'lyrics') {
-    // 1. Tuyệt đối loại bỏ từ ngữ thô tục, chửi thề, văng tục trong lời bài hát
+    // 1. Loại bỏ từ ngữ thô tục, chửi thề, văng tục trong lời bài hát
     cleaned = cleaned
       .replace(/\b(đéo|đếch)\b/gi, 'chẳng')
       .replace(/\b(mẹ kiếp|chó chết|khốn nạn)\b/gi, 'đớn đau thay')
@@ -482,94 +531,6 @@ function cleanOutputByGenre(text, effectiveGenre, role, videoTitle = '') {
       .replace(/\b(đồ khốn|kẻ khốn)\b/gi, 'kẻ vô tâm')
       .replace(/\bvãi\b/gi, 'quá')
       .replace(/\b(vcl|đm|dkm|đụ|lồn|cặc|buồi)\b/gi, '');
-
-    if (effectiveRole === 'female') {
-      cleaned = cleaned
-        // 1st person pronouns -> Em (loại bỏ triệt để Tôi, Tớ, Tao, Mình)
-        .replace(/\bTôi\b/g, 'Em')
-        .replace(/\btôi\b/g, 'em')
-        .replace(/\bTớ\b/g, 'Em')
-        .replace(/\btớ\b/g, 'em')
-        .replace(/\bTao\b/g, 'Em')
-        .replace(/\btao\b/g, 'em')
-        .replace(/\bchính mình\b/gi, 'chính em')
-        .replace(/\bbản thân mình\b/gi, 'bản thân em')
-        .replace(/\bcủa mình\b/gi, 'của em')
-        .replace(/\bvới mình\b/gi, 'với em')
-        .replace(/\bcho mình\b/gi, 'cho em')
-        .replace(/\bMình\b/g, 'Em')
-        .replace(/\bmình\b/g, 'em')
-        // 2nd person pronouns -> Anh (loại bỏ triệt để Cậu, Mày, Bạn)
-        .replace(/\bCậu\b/g, 'Anh')
-        .replace(/\bcậu\b/g, 'anh')
-        .replace(/\bMày\b/g, 'Anh')
-        .replace(/\bmày\b/g, 'anh')
-        .replace(/\bBạn\b/g, 'Anh')
-        .replace(/\bbạn\b/g, 'anh')
-        .replace(/^(Anh|anh) (nghĩ|thấy|nhớ|muốn|biết|yêu|cần|đang|đã|sẽ|chẳng|không|bước|khóc|mơ|đợi|chờ|lạc lối|cô đơn)\b/g, (m, p1, p2) => {
-          return (p1 === 'Anh' ? 'Em' : 'em') + ' ' + p2;
-        });
-    } else if (effectiveRole === 'male') {
-      cleaned = cleaned
-        // 1st person pronouns -> Anh (loại bỏ triệt để Tôi, Tớ, Tao, Mình)
-        .replace(/\bTôi\b/g, 'Anh')
-        .replace(/\btôi\b/g, 'anh')
-        .replace(/\bTớ\b/g, 'Anh')
-        .replace(/\btớ\b/g, 'anh')
-        .replace(/\bTao\b/g, 'Anh')
-        .replace(/\btao\b/g, 'anh')
-        .replace(/\bchính mình\b/gi, 'chính anh')
-        .replace(/\bbản thân mình\b/gi, 'bản thân anh')
-        .replace(/\bcủa mình\b/gi, 'của anh')
-        .replace(/\bvới mình\b/gi, 'với anh')
-        .replace(/\bcho mình\b/gi, 'cho anh')
-        .replace(/\bMình\b/g, 'Anh')
-        .replace(/\bmình\b/g, 'anh')
-        // 2nd person pronouns -> Em (loại bỏ triệt để Cậu, Mày, Bạn)
-        .replace(/\bCậu\b/g, 'Em')
-        .replace(/\bcậu\b/g, 'em')
-        .replace(/\bMày\b/g, 'Em')
-        .replace(/\bmày\b/g, 'em')
-        .replace(/\bBạn\b/g, 'Em')
-        .replace(/\bbạn\b/g, 'em')
-        .replace(/^(Em|em) (nghĩ|thấy|nhớ|muốn|biết|yêu|cần|đang|đã|sẽ|chẳng|không|bước|khóc|mơ|đợi|chờ|lạc lối|cô đơn)\b/g, (m, p1, p2) => {
-          return (p1 === 'Em' ? 'Anh' : 'anh') + ' ' + p2;
-        });
-    } else {
-      // General/Neutral lyrics: Cấm tuyệt đối "tao - mày"
-      cleaned = cleaned
-        .replace(/\bTao\b/g, 'Tôi')
-        .replace(/\btao\b/g, 'tôi')
-        .replace(/\bMày\b/g, 'Bạn')
-        .replace(/\bmày\b/g, 'bạn');
-    }
-  } else if (effectiveGenre === 'reality_show') {
-    // In reality shows, avoid inappropriate romantic couple address (anh yêu / em yêu)
-    cleaned = cleaned
-      .replace(/\banh yêu\b/gi, 'anh')
-      .replace(/\bem yêu\b/gi, 'em')
-      .replace(/\bcục cưng\b/gi, 'bạn');
-
-    // For Japanese idol variety shows (乃木坂工事中, Sakamichi, 48G), eliminate robotic "Tôi"
-    if (/(乃木坂|櫻坂|日向坂|akb48|工事中|そこ曲がったら|日向坂で会いましょう|スター誕生|モニタリング|水曜日のダウンタウン|ロンドンハーツ)/i.test(videoTitle)) {
-      cleaned = cleaned
-        .replace(/\bTôi nghĩ\b/g, 'Em nghĩ')
-        .replace(/\btôi nghĩ\b/g, 'em nghĩ')
-        .replace(/\bTôi thấy\b/g, 'Em thấy')
-        .replace(/\btôi thấy\b/g, 'em thấy')
-        .replace(/\bTôi muốn\b/g, 'Em muốn')
-        .replace(/\btôi muốn\b/g, 'em muốn')
-        .replace(/\bTôi không\b/g, 'Em không')
-        .replace(/\btôi không\b/g, 'em không')
-        .replace(/\bTôi đã\b/g, 'Em đã')
-        .replace(/\btôi đã\b/g, 'em đã');
-    }
-  } else if (effectiveGenre === 'news') {
-    // In news & reports, eliminate romantic & casual pronouns
-    cleaned = cleaned
-      .replace(/\banh yêu\b/gi, 'nam ca sĩ')
-      .replace(/\bem yêu\b/gi, 'nữ ca sĩ')
-      .replace(/\bmình ơi\b/gi, '');
   }
 
   return cleaned;
@@ -707,7 +668,7 @@ function getPronounInstruction(effectiveRole = 'auto', videoTitle = '', effectiv
 /**
  * Construct adaptive prompt based on video genre, title, entities and lyrics detection
  */
-function buildGeminiSubtitlePrompt(text, targetName, videoTitle = '', style = 'auto', pronounRole = 'auto') {
+function buildGeminiSubtitlePrompt(text, targetName, videoTitle = '', style = 'auto', pronounRole = 'auto', contextTail = []) {
   const contextLine = videoTitle ? `Video Context / Metadata: "${videoTitle.slice(0, 240)}"\n` : '';
   const effectiveGenre = resolveEffectiveGenre(style, videoTitle);
   let styleInstruction = '';
@@ -729,8 +690,22 @@ function buildGeminiSubtitlePrompt(text, targetName, videoTitle = '', style = 'a
   const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
   const pronounInstruction = targetName === 'Vietnamese' ? getPronounInstruction(effectiveRole, videoTitle, effectiveGenre) : '';
 
+  let previousContextSection = '';
+  if (Array.isArray(contextTail) && contextTail.length > 0) {
+    const validTails = contextTail.filter((t) => t && t.original && t.translation);
+    if (validTails.length > 0) {
+      const tailFormatted = validTails
+        .map((t) => `- Earlier Line: "${t.original}" -> Translated: "${t.translation}"`)
+        .join('\n');
+      previousContextSection = `\nPREVIOUS TRANSLATED CONTEXT (NGỮ CẢNH ĐÃ DỊCH TRƯỚC ĐÓ - DÙNG ĐỂ NỐI MẠCH VĂN):
+The following line(s) were translated immediately prior to this line. Use them to maintain seamless narrative flow, poetic romance, lyrical continuity, and consistent pronouns:
+${tailFormatted}
+MANDATORY DIRECTIVE: Output translation ONLY for the line below. Connect pronouns and emotional tone seamlessly with the previous context!\n`;
+    }
+  }
+
   return `You are a world-class bilingual subtitle translator and localization expert adapting style to video genre:
-${contextLine}${styleInstruction}${pronounInstruction}
+${contextLine}${styleInstruction}${pronounInstruction}${previousContextSection}
 
 Translate directly into natural, concise ${targetName} suitable for video subtitles. Output ONLY the translated text, no quotes, no explanations:
 ${text}`;
@@ -887,7 +862,7 @@ async function recordQuotaSaved(count = 1) {
 /**
  * Translate single subtitle line using Google Gemini AI API (Fast, low-latency, genre-aware)
  */
-async function translateWithGemini(text, sourceLang, targetLang, apiKey, model = 'gemini-3.5-flash-lite', videoTitle = '', style = 'auto', pronounRole = 'auto') {
+async function translateWithGemini(text, sourceLang, targetLang, apiKey, model = 'gemini-3.5-flash-lite', videoTitle = '', style = 'auto', pronounRole = 'auto', contextTail = []) {
   const effectiveKey = getNextGeminiApiKey(apiKey);
   if (!effectiveKey) {
     throw new Error('Missing Gemini API Key');
@@ -900,7 +875,7 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
   const effectiveGenre = resolveEffectiveGenre(style, videoTitle);
   const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
 
-  const prompt = buildGeminiSubtitlePrompt(text, targetName, videoTitle, style, effectiveRole);
+  const prompt = buildGeminiSubtitlePrompt(text, targetName, videoTitle, style, effectiveRole, contextTail);
 
   const callModel = async (modelName) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(effectiveKey)}`;
@@ -954,7 +929,8 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
       if (effectiveGenre === 'lyrics') {
         anchorRoleFromTranslation(videoTitle, cleaned);
       }
-      cleaned = cleanOutputByGenre(decodeHtmlEntities(cleaned), effectiveGenre, effectiveRole, videoTitle);
+      const finalRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
+      cleaned = cleanOutputByGenre(decodeHtmlEntities(cleaned), effectiveGenre, finalRole, videoTitle);
       return cleaned;
     }
   }
@@ -1046,9 +1022,12 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
     updatePronounSummaryFromTranslation(videoTitle, rawResults.join(' '), effectiveGenre);
   }
 
+  // Re-resolve effectiveRole with freshly anchored perspective so all batch lines are unified!
+  const finalRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
+
   // Sanitize every line with videoTitle and the anchored role
   const results = rawResults.map((line) => {
-    return line ? cleanOutputByGenre(line, effectiveGenre, effectiveRole, videoTitle) : '';
+    return line ? cleanOutputByGenre(line, effectiveGenre, finalRole, videoTitle) : '';
   });
 
   return results;
@@ -1057,7 +1036,7 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
 /**
  * Handle translation requests with caching and multi-engine routing
  */
-async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi', service = 'google', apiKey = '', model = 'gemini-3.5-flash-lite', videoTitle = '', style = 'auto', pronounRole = 'auto', isAutoTranslate = false, bypassGemini = false }) {
+async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi', service = 'google', apiKey = '', model = 'gemini-3.5-flash-lite', videoTitle = '', style = 'auto', pronounRole = 'auto', isAutoTranslate = false, bypassGemini = false, contextTail = [] }) {
   const trimmed = (text || '').trim();
   if (!trimmed) {
     return { success: true, translation: '' };
@@ -1085,7 +1064,7 @@ async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi',
         translated = await translateWithFreeGoogleEndpoint(trimmed, sourceLang, targetLang);
       } else if (gKey) {
         try {
-          translated = await translateWithGemini(trimmed, sourceLang, targetLang, gKey, model, videoTitle, style, pronounRole);
+          translated = await translateWithGemini(trimmed, sourceLang, targetLang, gKey, model, videoTitle, style, pronounRole, contextTail);
         } catch (err) {
           console.warn('[YT Sub Translate] Gemini API failed, falling back to Google Translate...', err);
           translated = await translateWithFreeGoogleEndpoint(trimmed, sourceLang, targetLang);
@@ -1110,8 +1089,11 @@ async function handleTranslation({ text, sourceLang = 'auto', targetLang = 'vi',
     // Enforce genre and pronoun sanitization across all engine outputs (Google, MyMemory, Gemini)
     if (translated) {
       const effectiveGenre = resolveEffectiveGenre(style, videoTitle);
-      const effectiveRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
-      translated = cleanOutputByGenre(translated, effectiveGenre, effectiveRole, videoTitle);
+      if (effectiveGenre === 'lyrics') {
+        anchorRoleFromTranslation(videoTitle, translated);
+      }
+      const finalRole = resolveSongPronounRole(pronounRole, videoTitle, effectiveGenre);
+      translated = cleanOutputByGenre(translated, effectiveGenre, finalRole, videoTitle);
     }
 
     // Add to cache with size limit check
@@ -1147,6 +1129,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'CLEAR_CACHE') {
     translationCache.clear();
     videoRoleAnchor.clear();
+    try {
+      if (chrome.storage && chrome.storage.session) {
+        chrome.storage.session.clear().catch(() => {});
+      }
+    } catch (_) {}
     chrome.tabs.query({ url: '*://*.youtube.com/*' }, (tabs) => {
       if (tabs && tabs.length > 0) {
         tabs.forEach((tab) => {
