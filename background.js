@@ -114,7 +114,7 @@ async function translateWithFreeGoogleEndpoint(text, sourceLang, targetLang) {
   const sl = sourceLang || 'auto';
   const tl = targetLang || 'vi';
 
-  // Primary endpoint: gtx
+  // Primary endpoint: gtx single
   try {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(text)}`;
     const response = await fetch(url, { keepalive: true });
@@ -124,23 +124,42 @@ async function translateWithFreeGoogleEndpoint(text, sourceLang, targetLang) {
         const translatedText = data[0]
           .map((item) => (Array.isArray(item) && item[0] ? item[0] : ''))
           .join('');
-        return decodeHtmlEntities(translatedText);
+        if (translatedText && translatedText.trim()) {
+          return decodeHtmlEntities(translatedText);
+        }
       }
     }
   } catch (err) {
     console.warn('[YT Sub Translate] Primary gtx endpoint failed, trying backup...', err);
   }
 
-  // Backup fast endpoint: dict-chrome-ex
-  const backupUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&q=${encodeURIComponent(text)}`;
-  const backupRes = await fetch(backupUrl, { keepalive: true });
-  if (backupRes.ok) {
-    const backupData = await backupRes.json();
-    const result = Array.isArray(backupData) ? backupData[0] : backupData;
-    if (result && typeof result === 'string') {
-      return decodeHtmlEntities(result);
+  // Backup fast endpoint 1: dict-chrome-ex
+  try {
+    const backupUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&q=${encodeURIComponent(text)}`;
+    const backupRes = await fetch(backupUrl, { keepalive: true });
+    if (backupRes.ok) {
+      const backupData = await backupRes.json();
+      const result = Array.isArray(backupData) ? backupData[0] : backupData;
+      if (result && typeof result === 'string' && result.trim()) {
+        return decodeHtmlEntities(result.trim());
+      }
     }
+  } catch (err) {
+    console.warn('[YT Sub Translate] Backup dict-chrome-ex endpoint failed, trying secondary...', err);
   }
+
+  // Backup fast endpoint 2: gtx alternate
+  try {
+    const backup2Url = `https://translate.googleapis.com/translate_a/t?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&q=${encodeURIComponent(text)}`;
+    const backup2Res = await fetch(backup2Url, { keepalive: true });
+    if (backup2Res.ok) {
+      const backup2Data = await backup2Res.json();
+      const result2 = Array.isArray(backup2Data) ? backup2Data[0] : backup2Data;
+      if (result2 && typeof result2 === 'string' && result2.trim()) {
+        return decodeHtmlEntities(result2.trim());
+      }
+    }
+  } catch (_) {}
 
   throw new Error('All Google translation endpoints failed');
 }
@@ -197,15 +216,24 @@ async function translateWithMyMemory(text, sourceLang, targetLang) {
 }
 
 /**
- * Safely resolve model name to supported Gemini API models
+ * Supported Gemini API models & transparent fallback chain
+ * Retains gemini-3.5-flash-lite as primary preference while ensuring zero 404 failures
  */
+let activeWorkingGeminiModel = null;
+const GEMINI_CANDIDATE_MODELS = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash'
+];
+
 function resolveGeminiModel(model) {
   if (!model) return 'gemini-3.5-flash-lite';
-  if (model.includes('lite')) return 'gemini-3.5-flash-lite';
+  if (model.includes('3.5-flash-lite') || model.includes('flash-lite') || model.includes('lite')) return 'gemini-3.5-flash-lite';
   if (model.includes('3.5-flash') || model.includes('3.5')) return 'gemini-3.5-flash';
-  // Map any legacy 2.0 or 1.5 to 3.5-flash-lite
-  if (model.includes('2.0') || model.includes('1.5')) return 'gemini-3.5-flash-lite';
-  return 'gemini-3.5-flash-lite';
+  return model;
 }
 
 /**
@@ -860,6 +888,71 @@ async function recordQuotaSaved(count = 1) {
 }
 
 /**
+ * Call Gemini API with automatic transparent fallback across candidate models
+ * Keeps gemini-3.5-flash-lite prioritized, but if 404, gracefully switches to available models
+ */
+async function callGeminiApiWithFallback(apiKey, prompt, generationConfig, requestedModel = 'gemini-3.5-flash-lite') {
+  const chosenModel = resolveGeminiModel(requestedModel);
+  const candidateList = [];
+  if (activeWorkingGeminiModel && !candidateList.includes(activeWorkingGeminiModel)) {
+    candidateList.push(activeWorkingGeminiModel);
+  }
+  if (chosenModel && !candidateList.includes(chosenModel)) {
+    candidateList.push(chosenModel);
+  }
+  GEMINI_CANDIDATE_MODELS.forEach((m) => {
+    if (!candidateList.includes(m)) candidateList.push(m);
+  });
+
+  let lastError = null;
+  for (const modelName of candidateList) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: generationConfig
+        }),
+        keepalive: true
+      });
+
+      if (res.status === 404) {
+        console.warn(`[YT Sub Translate] Gemini model ${modelName} returned 404, falling back to next candidate...`);
+        lastError = new Error(`HTTP 404 for ${modelName}`);
+        continue;
+      }
+
+      if (!res.ok) {
+        let errMessage = `HTTP ${res.status}`;
+        try {
+          const errJson = await res.json();
+          if (errJson?.error?.message) errMessage = errJson.error.message;
+        } catch (_) {}
+        if (res.status === 400 && (errMessage.includes('not found') || errMessage.includes('not supported'))) {
+          console.warn(`[YT Sub Translate] Gemini model ${modelName} not supported (${errMessage}), trying next candidate...`);
+          lastError = new Error(errMessage);
+          continue;
+        }
+        throw new Error(`Gemini API (${modelName}): ${errMessage}`);
+      }
+
+      activeWorkingGeminiModel = modelName;
+      return { res, modelName };
+    } catch (err) {
+      if (err.message && (err.message.includes('404') || err.message.includes('not supported') || err.message.includes('not found'))) {
+        lastError = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError || new Error('All candidate Gemini models failed');
+}
+
+/**
  * Translate single subtitle line using Google Gemini AI API (Fast, low-latency, genre-aware)
  */
 async function translateWithGemini(text, sourceLang, targetLang, apiKey, model = 'gemini-3.5-flash-lite', videoTitle = '', style = 'auto', pronounRole = 'auto', contextTail = []) {
@@ -877,45 +970,15 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
 
   const prompt = buildGeminiSubtitlePrompt(text, targetName, videoTitle, style, effectiveRole, contextTail);
 
-  const callModel = async (modelName) => {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(effectiveKey)}`;
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: effectiveGenre === 'news' ? 0.15 : 0.35,
-          maxOutputTokens: 120
-        }
-      }),
-      keepalive: true
-    });
-  };
-
-  let res = await callModel(chosenModel);
-
-  // If the chosen model returns 404, fallback gracefully to gemini-3.5-flash
-  if (res.status === 404 && chosenModel !== 'gemini-3.5-flash') {
-    console.warn(`[YT Sub Translate] ${chosenModel} not found on this API key, falling back to gemini-3.5-flash...`);
-    res = await callModel('gemini-3.5-flash');
-  }
-
-  if (!res.ok) {
-    let errMessage = `HTTP ${res.status}`;
-    try {
-      const errJson = await res.json();
-      if (errJson?.error?.message) {
-        errMessage = errJson.error.message;
-      }
-    } catch (_) {
-      try {
-        const errText = await res.text();
-        if (errText) errMessage = errText;
-      } catch (__) {}
-    }
-    throw new Error(`Gemini API (${chosenModel}): ${errMessage}`);
-  }
+  const { res, modelName: actualModel } = await callGeminiApiWithFallback(
+    effectiveKey,
+    prompt,
+    {
+      temperature: effectiveGenre === 'news' ? 0.15 : 0.35,
+      maxOutputTokens: 120
+    },
+    chosenModel
+  );
 
   const data = await res.json();
   const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -935,7 +998,7 @@ async function translateWithGemini(text, sourceLang, targetLang, apiKey, model =
     }
   }
 
-  throw new Error(`Invalid response structure from Gemini API (${chosenModel})`);
+  throw new Error(`Invalid response structure from Gemini API (${actualModel})`);
 }
 
 /**
@@ -955,35 +1018,15 @@ async function translateBatchWithGemini(lines, sourceLang, targetLang, apiKey, m
 
   const prompt = buildGeminiBatchSubtitlePrompt(lines, targetName, videoTitle, style, effectiveRole, contextTail);
 
-  const callModel = async (modelName) => {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(effectiveKey)}`;
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: effectiveGenre === 'news' ? 0.15 : 0.35,
-          maxOutputTokens: 2200
-        }
-      }),
-      keepalive: true
-    });
-  };
-
-  let res = await callModel(chosenModel);
-  if (res.status === 404 && chosenModel !== 'gemini-3.5-flash') {
-    res = await callModel('gemini-3.5-flash');
-  }
-
-  if (!res.ok) {
-    let errMessage = `HTTP ${res.status}`;
-    try {
-      const errJson = await res.json();
-      if (errJson?.error?.message) errMessage = errJson.error.message;
-    } catch (_) {}
-    throw new Error(`Gemini Batch API (${chosenModel}): ${errMessage}`);
-  }
+  const { res, modelName: actualModel } = await callGeminiApiWithFallback(
+    effectiveKey,
+    prompt,
+    {
+      temperature: effectiveGenre === 'news' ? 0.15 : 0.35,
+      maxOutputTokens: 2200
+    },
+    chosenModel
+  );
 
   const data = await res.json();
   const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
