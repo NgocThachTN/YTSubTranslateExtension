@@ -110,6 +110,55 @@
     return path.startsWith('/watch') || path.startsWith('/shorts') || path.startsWith('/live');
   }
 
+  function getTrackText(obj) {
+    if (!obj) return '';
+    if (typeof obj === 'string') return obj;
+    if (typeof obj.simpleText === 'string') return obj.simpleText;
+    if (Array.isArray(obj.runs)) return obj.runs.map((r) => r.text || '').join('');
+    return '';
+  }
+
+  function isAsrTrack(track, target) {
+    // 1. Direct kind / flag
+    if (track && (track.kind === 'asr' || track.is_asr === true || track.isAsr === true)) return true;
+    if (target && (target.kind === 'asr' || target.is_asr === true || target.isAsr === true)) return true;
+
+    // 2. vssId check (YouTube auto-generated captions start with "a.")
+    if (track && typeof track.vssId === 'string' && track.vssId.startsWith('a.')) return true;
+    if (target && typeof target.vssId === 'string' && target.vssId.startsWith('a.')) return true;
+
+    // 3. baseUrl query parameters
+    if (target && typeof target.baseUrl === 'string' && target.baseUrl.includes('kind=asr')) return true;
+    if (track && typeof track.baseUrl === 'string' && track.baseUrl.includes('kind=asr')) return true;
+
+    // 4. Text title multi-language detection
+    const names = [
+      getTrackText(track?.name),
+      getTrackText(track?.displayName),
+      getTrackText(track?.languageName),
+      getTrackText(target?.name),
+      getTrackText(target?.displayName),
+      getTrackText(target?.languageName),
+    ].join(' ').toLowerCase();
+
+    if (
+      names.includes('được tạo tự động') ||
+      names.includes('tự động tạo') ||
+      names.includes('auto-generated') ||
+      names.includes('generated automatically') ||
+      names.includes('自動生成') ||
+      names.includes('자동 생성') ||
+      names.includes('automatisch') ||
+      names.includes('automatiquement') ||
+      names.includes('generado automáticamente') ||
+      names.includes('создано автоматически')
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
   // 3. Proactively fetch caption track (including YouTube Native Subtitle Translation)
   function inspectPlayerCaptions() {
     if (!isVideoPage()) return;
@@ -129,16 +178,7 @@
         (target && target.baseUrl && target.baseUrl.includes('tlang='))
       );
 
-      const isAsr = Boolean(
-        (track && (track.kind === 'asr' || (track.vssId && track.vssId.startsWith('a.')))) ||
-        (target && (target.kind === 'asr' || (target.vssId && target.vssId.startsWith('a.')))) ||
-        (target && target.baseUrl && target.baseUrl.includes('kind=asr')) ||
-        (track && (
-          (typeof track.name === 'string' && (track.name.includes('được tạo tự động') || track.name.toLowerCase().includes('auto-generated') || track.name.includes('tự động tạo'))) ||
-          (typeof track.displayName === 'string' && (track.displayName.includes('được tạo tự động') || track.displayName.toLowerCase().includes('auto-generated') || track.displayName.includes('tự động tạo'))) ||
-          (typeof track.languageName === 'string' && (track.languageName.includes('được tạo tự động') || track.languageName.toLowerCase().includes('auto-generated') || track.languageName.includes('tự động tạo')))
-        ))
-      );
+      const isAsr = isAsrTrack(track, target);
 
       const trackLang = target?.languageCode || '';
       const translationLang = track?.translationLanguage?.languageCode ||
@@ -192,10 +232,21 @@
     } catch (e) {}
   }
 
+  function attachPlayerListeners() {
+    try {
+      const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+      if (player && typeof player.addEventListener === 'function') {
+        player.addEventListener('onCaptionsTrackListChanged', inspectPlayerCaptions);
+        player.addEventListener('captionsChanged', inspectPlayerCaptions);
+      }
+    } catch (_) {}
+  }
+
   window.addEventListener('yt-navigate-finish', () => {
     lastFetchedUrl = '';
     lastTrackStatusKey = '';
     if (isVideoPage()) {
+      setTimeout(attachPlayerListeners, 300);
       setTimeout(inspectPlayerCaptions, 300);
       setTimeout(inspectPlayerCaptions, 1000);
       setTimeout(inspectPlayerCaptions, 2500);
@@ -204,6 +255,7 @@
 
   window.addEventListener('load', () => {
     if (isVideoPage()) {
+      setTimeout(attachPlayerListeners, 500);
       setTimeout(inspectPlayerCaptions, 1000);
     }
   });
