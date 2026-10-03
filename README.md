@@ -1,4 +1,6 @@
 # YouTube Subtitle Translator (YT ViSub)
+<img width="500" height="492" alt="image" src="https://github.com/user-attachments/assets/d8015730-34a7-4ba4-9d67-5da51a39e49f" />
+
 
 ## Project Structure 
 
