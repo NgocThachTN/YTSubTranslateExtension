@@ -113,21 +113,96 @@
     }
   }
 
+  let userExplicitlyDisabledCC = false;
+  let lastAutoActivateVid = '';
+
+  /**
+   * Detect if an advertisement is actively playing on YouTube
+   */
+  function isAdActive() {
+    if (!playerElement) return false;
+    return Boolean(
+      playerElement.classList.contains('ad-showing') ||
+      playerElement.classList.contains('ad-interrupting') ||
+      playerElement.querySelector('.ad-showing') ||
+      playerElement.querySelector('.video-ads')
+    );
+  }
+
+  /**
+   * Automatically activate YouTube CC if captions are available and extension is enabled
+   */
+  function autoActivateCaptions(ccBtn) {
+    const vid = getCurrentVideoId();
+    if (!vid || lastAutoActivateVid === vid || userExplicitlyDisabledCC || isAdActive()) return;
+    lastAutoActivateVid = vid;
+
+    setTimeout(() => {
+      try {
+        if (!userExplicitlyDisabledCC && !isAdActive() && ccBtn && ccBtn.getAttribute('aria-pressed') === 'false') {
+          ccBtn.click();
+        }
+      } catch (_) {}
+    }, 600);
+  }
+
+  /**
+   * Bind CC button click listener to respect explicit user preferences
+   */
+  function attachCcButtonListener() {
+    if (!playerElement) return;
+    const ccBtn = playerElement.querySelector('.ytp-subtitles-button');
+    if (!ccBtn || ccBtn._ytsub_bound) return;
+    ccBtn._ytsub_bound = true;
+
+    ccBtn.addEventListener('click', () => {
+      setTimeout(() => {
+        const pressed = ccBtn.getAttribute('aria-pressed');
+        if (pressed === 'false') {
+          userExplicitlyDisabledCC = true;
+          hideAndClearOverlay();
+          updateNativeSubtitleVisibility(false);
+          syncConfigToMainWorld();
+        } else if (pressed === 'true') {
+          userExplicitlyDisabledCC = false;
+          syncConfigToMainWorld();
+          onCaptionsChanged();
+        }
+      }, 60);
+    });
+  }
+
   /**
    * Check if native YouTube subtitles are active and visible (CC button pressed)
    */
   function isYouTubeSubtitlesActive() {
     if (!playerElement) return false;
+    if (isAdActive()) return false;
+    if (userExplicitlyDisabledCC) return false;
+
+    // 1. If native caption segments are in DOM, subtitles are actively displaying
+    const captionContainer = playerElement.querySelector('.ytp-caption-window-container');
+    if (captionContainer && captionContainer.querySelectorAll('.ytp-caption-segment').length > 0) {
+      return true;
+    }
+
+    // 2. Check CC button state
     const ccBtn = playerElement.querySelector('.ytp-subtitles-button');
     if (ccBtn) {
-      if (ccBtn.style.display === 'none' || ccBtn.getAttribute('aria-hidden') === 'true' || ccBtn.disabled) {
-        return false;
-      }
+      attachCcButtonListener();
       const pressed = ccBtn.getAttribute('aria-pressed');
+      if (pressed === 'true') {
+        return true;
+      }
       if (pressed === 'false') {
+        // Auto-activate captions if extension is enabled
+        if (settings.enabled && settings.displayMode !== 'off') {
+          autoActivateCaptions(ccBtn);
+        }
         return false;
       }
     }
+
     return true;
   }
 
@@ -136,6 +211,8 @@
    */
   function handleVideoNavigation() {
     currentPlayingVideoId = getCurrentVideoId();
+    userExplicitlyDisabledCC = false;
+    lastAutoActivateVid = '';
     hideAndClearOverlay();
     detectedCaptionLang = '';
     isYouTubeAutoTranslateActive = false;
@@ -800,11 +877,18 @@
    * Send config to inject.js in main world
    */
   function syncConfigToMainWorld() {
-    window.postMessage({
+    const payload = {
       source: 'YTSUB_CONTENT_CONFIG',
       targetLang: settings.targetLang || 'vi',
       service: settings.translationService || 'google',
-    }, '*');
+      userDisabledCC: Boolean(userExplicitlyDisabledCC),
+    };
+    try {
+      document.dispatchEvent(new CustomEvent('__YTSUB_CONFIG__', { detail: payload }));
+    } catch (_) {}
+    try {
+      window.postMessage(payload, '*');
+    } catch (_) {}
   }
 
   /**
@@ -1460,6 +1544,7 @@
    */
   function extractCaptionText() {
     if (!playerElement) return '';
+    if (isAdActive()) return '';
     if (!isYouTubeSubtitlesActive()) return '';
 
     const captionContainer = playerElement.querySelector('.ytp-caption-window-container');
@@ -1588,7 +1673,7 @@
    * Guarantees that original and translated subtitle ALWAYS appear at the exact same instant (song song).
    */
   async function onCaptionsChanged() {
-    if (!settings.enabled || settings.displayMode === 'off') {
+    if (!settings.enabled || settings.displayMode === 'off' || isAdActive()) {
       hideAndClearOverlay();
       return;
     }
@@ -2056,26 +2141,26 @@
   }
 
   /**
-   * Listen for intercepted timedtext subtitles from inject.js
+   * Process intercepted timedtext subtitles and player events from inject.js
    */
-  window.addEventListener('message', (event) => {
-    if (!event.data || event.data.source !== 'YTSUB_INJECT') return;
+  function handleInjectPayload(data) {
+    if (!data || data.source !== 'YTSUB_INJECT') return;
 
-    if (event.data.type === 'NAVIGATE_START') {
+    if (data.type === 'NAVIGATE_START') {
       handleVideoNavigation();
       return;
     }
 
     // Ignore messages from stale or previous video
-    if (event.data.videoId) {
+    if (data.videoId) {
       const currentVid = getCurrentVideoId();
-      if (currentVid && event.data.videoId !== currentVid) {
+      if (currentVid && data.videoId !== currentVid) {
         return;
       }
     }
 
-    if (event.data.type === 'CAPTION_TRACK_STATUS') {
-      if (event.data.hasCaptions === false) {
+    if (data.type === 'CAPTION_TRACK_STATUS') {
+      if (data.hasCaptions === false) {
         detectedCaptionLang = '';
         isYouTubeAutoTranslateActive = false;
         isAutoGeneratedTrack = false;
@@ -2085,14 +2170,14 @@
         updateNativeSubtitleVisibility(false);
         return;
       }
-      if (typeof event.data.isAutoTranslate === 'boolean') {
-        isYouTubeAutoTranslateActive = event.data.isAutoTranslate;
+      if (typeof data.isAutoTranslate === 'boolean') {
+        isYouTubeAutoTranslateActive = data.isAutoTranslate;
       }
-      if (typeof event.data.isAutoGenerated === 'boolean') {
-        isAutoGeneratedTrack = event.data.isAutoGenerated;
+      if (typeof data.isAutoGenerated === 'boolean') {
+        isAutoGeneratedTrack = data.isAutoGenerated;
       }
-      if (event.data.trackLang) {
-        detectedCaptionLang = event.data.trackLang;
+      if (data.trackLang) {
+        detectedCaptionLang = data.trackLang;
       }
       if (isTrackMatchingTargetLanguage() || (!settings.translateAutoGenerated && isAsrActive())) {
         updateNativeSubtitleVisibility(true);
@@ -2102,29 +2187,27 @@
       return;
     }
 
-    if (event.data.captionLang && !event.data.isPrefetch) {
-      detectedCaptionLang = event.data.captionLang;
+    if (data.captionLang && !data.isPrefetch) {
+      detectedCaptionLang = data.captionLang;
       if (isTrackMatchingTargetLanguage()) {
         updateNativeSubtitleVisibility(true);
       }
     }
-    if (event.data.isAutoTranslate && !event.data.isPrefetch) {
+    if (data.isAutoTranslate && !data.isPrefetch) {
       isYouTubeAutoTranslateActive = true;
     }
-    if (typeof event.data.isAutoGenerated === 'boolean' && !event.data.isPrefetch) {
-      isAutoGeneratedTrack = event.data.isAutoGenerated;
+    if (typeof data.isAutoGenerated === 'boolean' && !data.isPrefetch) {
+      isAutoGeneratedTrack = data.isAutoGenerated;
     }
 
-    if (event.data.type === 'TIMEDTEXT_TRANSLATED_RESPONSE') {
-      parseYouTubeNativeTranslatedData(event.data.data);
-    } else if (event.data.type === 'TIMEDTEXT_RESPONSE') {
-      const cues = parseTimedTextData(event.data.data);
+    if (data.type === 'TIMEDTEXT_TRANSLATED_RESPONSE') {
+      parseYouTubeNativeTranslatedData(data.data);
+    } else if (data.type === 'TIMEDTEXT_RESPONSE') {
+      const cues = parseTimedTextData(data.data);
       if (cues.length > 0) {
         videoTimedCues = cues;
         matchTimedCuesWithNativeTranslations(cues);
         console.log(`[YT ViSub] Loaded ${cues.length} chronological subtitle cues for cluster pre-translation.`);
-        // Defer background pre-translation until video has started playing,
-        // ensuring video stream buffering gets 100% network bandwidth!
         const video = attachedVideoElement || document.querySelector('video');
         if (video && !video.paused && video.readyState >= 3) {
           prioritizeUpcomingClusters();
@@ -2136,6 +2219,20 @@
           }, 1800);
         }
       }
+    }
+  }
+
+  // 1. Primary isolated communication: CustomEvent on document
+  document.addEventListener('__YTSUB_EVENT__', (event) => {
+    if (event.detail) {
+      handleInjectPayload(event.detail);
+    }
+  });
+
+  // 2. Fallback message listener
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.source === 'YTSUB_INJECT') {
+      handleInjectPayload(event.data);
     }
   });
 
@@ -2202,21 +2299,35 @@
     const captionContainer = playerElement.querySelector('.ytp-caption-window-container');
     currentCaptionContainerNode = captionContainer;
 
-    // Continuous shallow observer on playerElement to detect when container is added/removed/replaced
+    // Continuous shallow observer on playerElement to detect when container is added/removed/replaced or ad finishes
     if (!playerContainerObserver) {
       let containerDebounceTimer = null;
+      let lastWasAd = isAdActive();
       playerContainerObserver = new MutationObserver(() => {
         if (containerDebounceTimer) return;
         containerDebounceTimer = setTimeout(() => {
           containerDebounceTimer = null;
+          const currentAd = isAdActive();
+          if (lastWasAd && !currentAd) {
+            // Ad just finished! Reset state and trigger caption check for the main video
+            lastWasAd = false;
+            hideAndClearOverlay();
+            lastCaptionText = '';
+            observeCaptionContainer();
+            onCaptionsChanged();
+            return;
+          }
+          lastWasAd = currentAd;
           const live = playerElement ? playerElement.querySelector('.ytp-caption-window-container') : null;
           if (live !== currentCaptionContainerNode) {
             observeCaptionContainer();
           }
         }, 150);
       });
-      playerContainerObserver.observe(playerElement, { childList: true });
+      playerContainerObserver.observe(playerElement, { childList: true, attributes: true, attributeFilter: ['class'] });
     }
+
+    attachCcButtonListener();
 
     if (!captionContainer) {
       hideAndClearOverlay();
