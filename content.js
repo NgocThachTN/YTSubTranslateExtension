@@ -155,7 +155,10 @@
     if (!ccBtn || ccBtn._ytsub_bound) return;
     ccBtn._ytsub_bound = true;
 
-    ccBtn.addEventListener('click', () => {
+    ccBtn.addEventListener('click', (e) => {
+      // Ignore programmatic clicks from extension auto-activation!
+      if (!e.isTrusted) return;
+
       setTimeout(() => {
         const pressed = ccBtn.getAttribute('aria-pressed');
         if (pressed === 'false') {
@@ -168,7 +171,7 @@
           syncConfigToMainWorld();
           onCaptionsChanged();
         }
-      }, 60);
+      }, 250);
     });
   }
 
@@ -2277,10 +2280,38 @@
 
     // Catch any caption update (appearance, text change, or disappearance)
     const currentText = extractCaptionText();
-    if (currentText !== lastCaptionText) {
-      onCaptionsChanged();
-    } else if (!currentText && innerBox && !innerBox.classList.contains('ytsub-hidden')) {
-      hideAndClearOverlay();
+    if (currentText) {
+      if (currentText !== lastCaptionText) {
+        onCaptionsChanged();
+      }
+    } else {
+      // Fallback: If YouTube DOM caption container is temporarily empty, but videoTimedCues are loaded
+      if (settings.enabled && settings.displayMode !== 'off' && !isAdActive() && !userExplicitlyDisabledCC && videoTimedCues && videoTimedCues.length > 0) {
+        const currentMs = getVideoCurrentTimeMs();
+        const cue = getCurrentCueAtTime(currentMs);
+        if (cue && cue.text) {
+          if (cue.text !== lastCaptionText) {
+            lastCaptionText = cue.text;
+            const service = getEffectiveService();
+            const soundOffline = resolveSoundCueOffline(cue.text);
+            if (soundOffline) {
+              renderSubtitlesSimultaneously(cue.text, soundOffline);
+            } else {
+              const cached = localCache.get(getCacheKey(service, settings.sourceLang, settings.targetLang, cue.text)) ||
+                             (service !== 'gemini' ? localCache.get(getCacheKey('gemini', settings.sourceLang, settings.targetLang, cue.text)) : null);
+              if (cached) {
+                renderSubtitlesSimultaneously(cue.text, cached);
+              } else {
+                renderSubtitleWithLoading(cue.text);
+              }
+            }
+          }
+          return;
+        }
+      }
+      if (innerBox && !innerBox.classList.contains('ytsub-hidden')) {
+        hideAndClearOverlay();
+      }
     }
   }
 
